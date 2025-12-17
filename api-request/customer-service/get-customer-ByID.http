@@ -1,0 +1,4 @@
+### GET request to get All Customers
+GET http://localhost:4000//api/customers/123e4567-e89b-12d3-a456-426614174000
+
+###
