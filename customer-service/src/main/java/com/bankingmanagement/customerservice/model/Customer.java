@@ -46,6 +46,19 @@ public class Customer {
     @Column(name = "updated_at")
     private Instant updatedAt = Instant.now();
 
+    @PrePersist
+    public void prePersist() {
+        if (externalUserId == null) {
+            externalUserId = UUID.randomUUID();
+        }
+        if (createdAt == null) {
+            createdAt = Instant.now();
+        }
+        if (updatedAt == null) {
+            updatedAt = Instant.now();
+        }
+    }
+
     @PreUpdate
     public void preUpdate() {
         updatedAt = Instant.now();
