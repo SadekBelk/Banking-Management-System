@@ -3,6 +3,7 @@ package com.bankingmanagement.customerservice.controller;
 import com.bankingmanagement.customerservice.dto.CustomerRequestDto;
 import com.bankingmanagement.customerservice.dto.CustomerResponseDto;
 import com.bankingmanagement.customerservice.service.CustomerService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -15,6 +16,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/customers")
 @RequiredArgsConstructor
+@Tag(name = "Customer", description = "API for managing CUSTOMERS")
 public class CustomerController {
 
     private final CustomerService customerService;
