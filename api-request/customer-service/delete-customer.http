@@ -1,4 +1,4 @@
 ### GET request to example server
-DELETE http://localhost:4000/api/customers/123e4567-e89b-12d3-a456-426614174020
+DELETE http://localhost:4000/api/customers/5838f619-a5de-42f4-9075-b9a6c7aa0656
 
 ###

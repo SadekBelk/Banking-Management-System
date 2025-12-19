@@ -1,6 +1,6 @@
 ### PUT request to update existing Customer
 #PUT http://localhost:4000/api/customers/123e4567-e89b-12d3-a456-426614174000
-PUT http://localhost:4000/api/customers/123e4567-e89b-12d3-a456-426614174020
+PUT http://localhost:4000/api/customers/7213cbb2-a39c-46b9-b4cd-ed72421836a1
 Content-Type: application/json
 
 {
