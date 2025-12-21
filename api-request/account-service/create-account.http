@@ -1,0 +1,10 @@
+### POST request to create NEW account
+POST http://localhost:4001/api/accounts
+Content-Type: application/json
+
+{
+  "customerId": "c56a4180-65aa-42ec-a945-5fd21dec0538",
+  "type": "SAVINGS",
+  "initialBalance": 1000.00
+}
+###
