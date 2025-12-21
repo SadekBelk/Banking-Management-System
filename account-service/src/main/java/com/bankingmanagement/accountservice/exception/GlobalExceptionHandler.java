@@ -49,4 +49,15 @@ public class GlobalExceptionHandler {
                 ));
     }
 
+    @ExceptionHandler(CustomerNotFoundException.class)
+    public ResponseEntity<ApiError> handleCustomerNotFound(CustomerNotFoundException ex) {
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(new ApiError(
+                        ApiErrorCode.CUSTOMER_NOT_FOUND,
+                        ex.getMessage(),
+                        HttpStatus.NOT_FOUND.value()
+                ));
+    }
+
 }

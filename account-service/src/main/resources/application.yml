@@ -1,14 +1,19 @@
 server:
   port: 4001
 
+customer-service:
+#  base-url: http://localhost:4000 # local dev (no Docker)
+  base-url: http://customer-service:4000 # ✅ Docker service name
+
 spring:
   application:
     name: account-service
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/accountdb
-    username: postgres
-    password: sadek
+#    url: jdbc:postgresql://localhost:5432/accountdb # ❌ localhost = the account-service container itself, NOT your database container.
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://account-db:5432/accountdb}
+    username: ${SPRING_DATASOURCE_USERNAME:admin}
+    password: ${SPRING_DATASOURCE_PASSWORD:password}
     driver-class-name: org.postgresql.Driver
 
   jpa:

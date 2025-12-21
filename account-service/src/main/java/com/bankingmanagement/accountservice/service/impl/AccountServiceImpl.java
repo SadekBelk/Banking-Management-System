@@ -2,7 +2,9 @@ package com.bankingmanagement.accountservice.service.impl;
 
 import com.bankingmanagement.accountservice.dto.AccountRequestDto;
 import com.bankingmanagement.accountservice.dto.AccountResponseDto;
+import com.bankingmanagement.accountservice.client.CustomerClient;
 import com.bankingmanagement.accountservice.exception.AccountNotFoundException;
+import com.bankingmanagement.accountservice.exception.CustomerNotFoundException;
 import com.bankingmanagement.accountservice.exception.InvalidInitialBalanceException;
 import com.bankingmanagement.accountservice.mapper.AccountMapper;
 import com.bankingmanagement.accountservice.model.Account;
@@ -10,6 +12,7 @@ import com.bankingmanagement.accountservice.model.AccountStatus;
 import com.bankingmanagement.accountservice.repository.AccountRepository;
 import com.bankingmanagement.accountservice.service.AccountService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -25,8 +28,23 @@ public class AccountServiceImpl implements AccountService {
     private final AccountRepository accountRepository;
     private final AccountMapper accountMapper;
 
+    private final CustomerClient customerClient;
+
+    @Value("${customer-service.base-url}")
+    private String customerServiceBaseUrl;
+
     @Override
     public AccountResponseDto createAccount(AccountRequestDto request) {
+
+        // 0️⃣ Validate customer existence (NEW)
+        boolean exists = customerClient.customerExists(
+                request.getCustomerId(),
+                customerServiceBaseUrl
+        );
+
+        if (!exists) {
+            throw new CustomerNotFoundException(request.getCustomerId());
+        }
 
         // 1️⃣ Validate initial balance
         if (request.getInitialBalance().compareTo(BigDecimal.ZERO) < 0) {
