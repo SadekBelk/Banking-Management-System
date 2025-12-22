@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package bank.common;
+
+option java_multiple_files = true;
+option java_package = "com.bankingmanagement.proto.common";
+//option java_outer_classname = "CommonProto"; // Prevents ugly generated names
+
+message Money {
+  string currency = 1;
+  int64 amount = 2;
+}
+
+message ErrorResponse {
+  string code = 1;
+  string message = 2;
+}
+
+
+//    ✅ Rule 1: Requests contain only what the server needs
+//
+//    No UI concepts, no extra data.
+//
+//    ✅ Rule 2: Responses contain data + status
+//
+//    Either:
+//
+//    * explicit success + payload
+//
+//    * or oneof result | error
+//
+//    ✅ Rule 3: IDs are strings
+//
+//    Even if DB uses UUID/Long.
+//
+//    ✅ Rule 4: Money is NEVER double
+//
+//    You already did this right 👍 (int64 amount + currency)

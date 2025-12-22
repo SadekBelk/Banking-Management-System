@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package bank.auth;
+
+option java_multiple_files = true;
+option java_package = "com.bankingmanagement.proto.auth";
+
+service AuthService {
+  rpc ValidateToken(TokenRequest) returns (AuthResult);
+}
+
+message TokenRequest {
+  string token = 1;
+}
+
+message AuthResult {
+  bool valid = 1;
+  string user_id = 2; // ✅ Rule 3: IDs are strings Even if DB uses UUID/Long.
+  repeated string roles = 3;
+}

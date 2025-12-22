@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package bank.account;
+
+import "common.proto";
+
+option java_multiple_files = true;
+option java_package = "com.bankingmanagement.proto.account";
+
+service AccountService {
+  rpc GetBalance(GetBalanceRequest) returns (GetBalanceResponse);
+  rpc ReserveBalance(ReserveBalanceRequest) returns (ReserveBalanceResponse);
+}
+
+message GetBalanceRequest {
+  string account_id = 1; // ✅ Rule 3: IDs are strings Even if DB uses UUID/Long.
+}
+
+message GetBalanceResponse {
+  bank.common.Money available_balance = 1;
+}
+
+message ReserveBalanceRequest {
+  string account_id = 1;
+  bank.common.Money amount = 2;
+  string transaction_id = 3; // idempotency -> prevents double reservation
+}
+
+message ReserveBalanceResponse {
+  bool success = 1;
+  bank.common.ErrorResponse error = 2;
+}
