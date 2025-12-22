@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package bank.transaction;
+
+import "common.proto";
+
+option java_multiple_files = true;
+option java_package = "com.bankingmanagement.proto.transaction";
+
+service TransactionService {
+  rpc CreateTransaction(CreateTransactionRequest) returns (CreateTransactionResponse);
+}
+
+message CreateTransactionRequest {
+  string from_account_id = 1;
+  string to_account_id = 2;
+  bank.common.Money amount = 3;
+  string reference = 4; // optional note
+}
+
+message CreateTransactionResponse {
+  string transaction_id = 1;
+  string status = 2; // PENDING, COMPLETED, FAILED
+  bank.common.ErrorResponse error = 3;
+}
