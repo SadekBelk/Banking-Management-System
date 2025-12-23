@@ -1,43 +1,49 @@
 package com.bankingmanagement.transactionservice.mapper;
 
-import com.bankingmanagement.transactionservice.dto.TransactionDTO;
+import com.bankingmanagement.transactionservice.dto.TransactionRequestDto;
+import com.bankingmanagement.transactionservice.dto.TransactionResponseDto;
 import com.bankingmanagement.transactionservice.model.Transaction;
 import org.springframework.stereotype.Component;
 
 @Component
 public class TransactionMapper {
-    
-    public TransactionDTO toDTO(Transaction transaction) {
+
+    /**
+     * Convert Entity to Response DTO (for API responses)
+     */
+    public TransactionResponseDto toResponseDto(Transaction transaction) {
         if (transaction == null) {
             return null;
         }
-        
-        return TransactionDTO.builder()
-                .id(transaction.getId())
-                .fromAccountId(transaction.getFromAccountId())
-                .toAccountId(transaction.getToAccountId())
-                .amount(transaction.getAmount())
-                .transactionType(transaction.getTransactionType())
-                .status(transaction.getStatus())
-                .createdAt(transaction.getCreatedAt())
-                .updatedAt(transaction.getUpdatedAt())
-                .description(transaction.getDescription())
-                .build();
+
+        TransactionResponseDto dto = new TransactionResponseDto();
+        dto.setId(transaction.getId());
+        dto.setFromAccountId(transaction.getFromAccountId());
+        dto.setToAccountId(transaction.getToAccountId());
+        dto.setAmount(transaction.getAmount());
+        dto.setTransactionType(transaction.getTransactionType());
+        dto.setStatus(transaction.getStatus());
+        dto.setCreatedAt(transaction.getCreatedAt());
+        dto.setUpdatedAt(transaction.getUpdatedAt());
+        dto.setDescription(transaction.getDescription());
+        return dto;
     }
-    
-    public Transaction toEntity(TransactionDTO dto) {
-        if (dto == null) {
+
+    /**
+     * Convert Request DTO to Entity (for creating new transactions)
+     */
+    public Transaction toEntity(TransactionRequestDto requestDto) {
+        if (requestDto == null) {
             return null;
         }
-        
-        return Transaction.builder()
-                .id(dto.getId())
-                .fromAccountId(dto.getFromAccountId())
-                .toAccountId(dto.getToAccountId())
-                .amount(dto.getAmount())
-                .transactionType(dto.getTransactionType())
-                .status(dto.getStatus())
-                .description(dto.getDescription())
-                .build();
+
+        Transaction transaction = new Transaction();
+        transaction.setFromAccountId(requestDto.getFromAccountId());
+        transaction.setToAccountId(requestDto.getToAccountId());
+        transaction.setAmount(requestDto.getAmount());
+        transaction.setTransactionType(requestDto.getTransactionType());
+        transaction.setDescription(requestDto.getDescription());
+        // Status is set by service layer, not from request
+        return transaction;
     }
 }

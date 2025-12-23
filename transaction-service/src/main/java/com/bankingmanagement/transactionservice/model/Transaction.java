@@ -31,10 +31,10 @@ public class Transaction {
     private BigDecimal amount;
     
     @Column(nullable = false)
-    private String transactionType; // TRANSFER, DEPOSIT, WITHDRAWAL
+    private TransactionType transactionType;
     
     @Column(nullable = false)
-    private String status; // PENDING, COMPLETED, FAILED
+    private TransactionStatus status;
     
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
