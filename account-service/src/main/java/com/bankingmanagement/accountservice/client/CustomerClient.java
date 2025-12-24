@@ -16,18 +16,23 @@ public class CustomerClient {
     }
 
     public boolean customerExists(UUID customerId, String baseUrl) {
-        return webClient
-                .get()
-                .uri(baseUrl + "/api/customers/{id}", customerId)
-                .retrieve()
-                .onStatus(
-                        status -> status.value() == 404,
-                        response -> Mono.empty()
-                )
-                .toBodilessEntity()
-                .map(response -> true)
-                .onErrorReturn(false)
-                .block();
+        return Boolean.TRUE.equals(
+                webClient
+                        .get()
+                        .uri(baseUrl + "/api/customers/{id}", customerId)
+                        .exchangeToMono(response -> {
+                            if (response.statusCode().is2xxSuccessful()) {
+                                return Mono.just(true);
+                            } else if (response.statusCode().value() == 404) {
+                                return Mono.just(false);
+                            } else {
+                                // For other error statuses, return false
+                                return Mono.just(false);
+                            }
+                        })
+                        .onErrorReturn(false)
+                        .block()
+        );
     }
 
 }
