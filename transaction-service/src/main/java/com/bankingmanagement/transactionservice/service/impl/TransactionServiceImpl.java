@@ -68,13 +68,13 @@ public class TransactionServiceImpl implements TransactionService {
         transaction.setStatus(TransactionStatus.PENDING);
 
         // 3️⃣ Save transaction (generates ID for idempotency key)
-        transaction = transactionRepository.save(transaction);
+        transaction = transactionRepository.save(transaction); // Saved as PENDING
         log.info("Transaction created with ID: {}", transaction.getId());
 
         // 4️⃣ Process based on transaction type
         try {
-            processTransaction(transaction);
-            transaction.setStatus(TransactionStatus.COMPLETED);
+            processTransaction(transaction); // Currently does nothing (TODO: gRPC)
+            transaction.setStatus(TransactionStatus.COMPLETED); // ← Immediately set to COMPLETED
             log.info("Transaction {} completed successfully", transaction.getId());
         } catch (TransactionException ex) {
             transaction.setStatus(TransactionStatus.FAILED);
@@ -83,7 +83,7 @@ public class TransactionServiceImpl implements TransactionService {
         }
 
         // 5️⃣ Save final status and return
-        transaction = transactionRepository.save(transaction);
+        transaction = transactionRepository.save(transaction); // Saved as COMPLETED
         return transactionMapper.toResponseDto(transaction);
     }
 
