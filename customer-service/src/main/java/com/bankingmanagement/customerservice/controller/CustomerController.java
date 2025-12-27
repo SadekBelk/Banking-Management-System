@@ -4,6 +4,7 @@ import com.bankingmanagement.customerservice.dto.CustomerRequestDto;
 import com.bankingmanagement.customerservice.dto.CustomerResponseDto;
 import com.bankingmanagement.customerservice.service.CustomerService;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -23,6 +24,7 @@ public class CustomerController {
 
     // -------------------- CREATE CUSTOMER --------------------
     @PostMapping
+    @Operation(summary = "Create Customer", description = "Creates a new customer")
     public ResponseEntity<CustomerResponseDto> createCustomer(
             @Valid @RequestBody CustomerRequestDto request
     ) {
@@ -32,6 +34,7 @@ public class CustomerController {
 
     // -------------------- GET CUSTOMER BY ID --------------------
     @GetMapping("/{id}")
+    @Operation(summary = "Get Customer by ID", description = "Retrieves a customer by their unique ID")
     public ResponseEntity<CustomerResponseDto> getCustomerById(
             @PathVariable("id") UUID id
     ) {
@@ -41,6 +44,7 @@ public class CustomerController {
 
     // -------------------- GET ALL CUSTOMERS --------------------
     @GetMapping
+    @Operation(summary = "Get All Customers", description = "Retrieves a list of all customers")
     public ResponseEntity<List<CustomerResponseDto>> getAllCustomers() {
         List<CustomerResponseDto> customers = customerService.getAllCustomers();
         return ResponseEntity.ok(customers);
@@ -48,6 +52,7 @@ public class CustomerController {
 
     // -------------------- UPDATE CUSTOMER --------------------
     @PutMapping("/{id}")
+    @Operation(summary = "Update Customer", description = "Updates an existing customer's information")
     public ResponseEntity<CustomerResponseDto> updateCustomer(
             @PathVariable("id") UUID id,
             @Valid @RequestBody CustomerRequestDto request
@@ -58,6 +63,7 @@ public class CustomerController {
 
     // -------------------- DELETE CUSTOMER --------------------
     @DeleteMapping("/{id}")
+    @Operation(summary = "Delete Customer", description = "Deletes a customer by their unique ID")
     public ResponseEntity<Void> deleteCustomer(@PathVariable("id") UUID id) {
         customerService.deleteCustomer(id);
         return ResponseEntity.noContent().build();
