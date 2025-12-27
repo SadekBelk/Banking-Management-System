@@ -28,3 +28,12 @@ spring:
 logging:
   level:
     org.springdoc: DEBUG
+# Actuator Configuration for Health Checks
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always

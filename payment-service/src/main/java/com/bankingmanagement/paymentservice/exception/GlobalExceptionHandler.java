@@ -39,6 +39,26 @@ public class GlobalExceptionHandler {
                 ));
     }
 
+    @ExceptionHandler(InsufficientBalanceException.class)
+    public ResponseEntity<ApiError> handleInsufficientBalance(InsufficientBalanceException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiError(
+                        ApiErrorCode.INSUFFICIENT_FUNDS,
+                        ex.getMessage(),
+                        HttpStatus.BAD_REQUEST.value()
+                ));
+    }
+
+    @ExceptionHandler(ReservationException.class)
+    public ResponseEntity<ApiError> handleReservationError(ReservationException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ApiError(
+                        ApiErrorCode.PAYMENT_PROCESSING_ERROR,
+                        ex.getMessage(),
+                        HttpStatus.CONFLICT.value()
+                ));
+    }
+
     @ExceptionHandler(InvalidPaymentException.class)
     public ResponseEntity<ApiError> handleInvalidPayment(InvalidPaymentException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
