@@ -1,6 +1,11 @@
 server:
   port: 4001
 
+# gRPC Server Configuration
+grpc:
+  server:
+    port: 9001  # gRPC server runs on separate port from HTTP
+
 customer-service:
 #  base-url: http://localhost:4000 # local dev (no Docker)
   base-url: http://customer-service:4000 # ✅ Docker service name
