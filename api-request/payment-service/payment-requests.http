@@ -1,0 +1,30 @@
+### Create a new payment
+POST http://localhost:4003/api/payments
+Content-Type: application/json
+
+{
+  "sourceAccountId": "{{sourceAccountId}}",
+  "destinationAccountId": "{{destinationAccountId}}",
+  "amount": 100.00,
+  "type": "TRANSFER",
+  "currency": "USD",
+  "description": "Test payment"
+}
+
+### Get payment by ID
+GET http://localhost:4003/api/payments/{{paymentId}}
+
+### Get payment by reference number
+GET http://localhost:4003/api/payments/reference/{{referenceNumber}}
+
+### Get all payments for an account
+GET http://localhost:4003/api/payments/account/{{accountId}}
+
+### Get payments by status
+GET http://localhost:4003/api/payments/status/PENDING
+
+### Cancel a payment
+PATCH http://localhost:4003/api/payments/{{paymentId}}/cancel
+
+### Process a payment
+POST http://localhost:4003/api/payments/{{paymentId}}/process
