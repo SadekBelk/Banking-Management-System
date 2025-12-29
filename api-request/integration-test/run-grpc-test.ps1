@@ -16,7 +16,7 @@ Write-Host "============================================" -ForegroundColor Cyan
 Write-Host "`n[Check] Verifying services are running..." -ForegroundColor Yellow
 
 try {
-    $null = Invoke-RestMethod -Uri "http://localhost:4001/api/v1/accounts" -Method GET -TimeoutSec 5
+    $null = Invoke-RestMethod -Uri "http://localhost:4001/api/accounts" -Method GET -TimeoutSec 5
     Write-Host "[OK] account-service is running (HTTP: 4001, gRPC: 9001)" -ForegroundColor Green
 } catch {
     Write-Host "[ERROR] account-service is NOT running. Start it first!" -ForegroundColor Red
@@ -24,7 +24,7 @@ try {
 }
 
 try {
-    $null = Invoke-RestMethod -Uri "http://localhost:4003/api/v1/payments" -Method GET -TimeoutSec 5 -ErrorAction SilentlyContinue
+    $null = Invoke-RestMethod -Uri "http://localhost:4003/api/payments" -Method GET -TimeoutSec 5 -ErrorAction SilentlyContinue
     Write-Host "[OK] payment-service is running (HTTP: 4003)" -ForegroundColor Green
 } catch {
     if ($_.Exception.Response.StatusCode -eq 404 -or $_.Exception.Response.StatusCode -eq 500) {
@@ -42,10 +42,10 @@ $sourceAccountBody = @{
     customerId = "550e8400-e29b-41d4-a716-446655440001"
     type = "CHECKING"
     currency = "USD"
-    initialDeposit = 1000.00
+    initialBalance = 1000.00
 } | ConvertTo-Json
 
-$sourceAccount = Invoke-RestMethod -Uri "http://localhost:4001/api/v1/accounts" `
+$sourceAccount = Invoke-RestMethod -Uri "http://localhost:4001/api/accounts" `
     -Method POST `
     -ContentType "application/json" `
     -Body $sourceAccountBody
@@ -64,10 +64,10 @@ $destAccountBody = @{
     customerId = "550e8400-e29b-41d4-a716-446655440002"
     type = "CHECKING"
     currency = "USD"
-    initialDeposit = 0.00
+    initialBalance = 0.00
 } | ConvertTo-Json
 
-$destAccount = Invoke-RestMethod -Uri "http://localhost:4001/api/v1/accounts" `
+$destAccount = Invoke-RestMethod -Uri "http://localhost:4001/api/accounts" `
     -Method POST `
     -ContentType "application/json" `
     -Body $destAccountBody
@@ -94,7 +94,7 @@ $paymentBody = @{
 } | ConvertTo-Json
 
 try {
-    $payment = Invoke-RestMethod -Uri "http://localhost:4003/api/v1/payments" `
+    $payment = Invoke-RestMethod -Uri "http://localhost:4003/api/payments" `
         -Method POST `
         -ContentType "application/json" `
         -Body $paymentBody
@@ -120,7 +120,7 @@ try {
 # Step 4: Verify Source Account Balance
 Write-Host "`n[Step 4] Verifying source account balance..." -ForegroundColor Yellow
 
-$sourceAccountAfter = Invoke-RestMethod -Uri "http://localhost:4001/api/v1/accounts/$sourceAccountId" -Method GET
+$sourceAccountAfter = Invoke-RestMethod -Uri "http://localhost:4001/api/accounts/$sourceAccountId" -Method GET
 
 Write-Host "[Result] Source Account Balance:" -ForegroundColor Green
 Write-Host "         Before: 1000.00 USD" -ForegroundColor White
@@ -145,7 +145,7 @@ $largePaymentBody = @{
 } | ConvertTo-Json
 
 try {
-    $failedPayment = Invoke-RestMethod -Uri "http://localhost:4003/api/v1/payments" `
+    $failedPayment = Invoke-RestMethod -Uri "http://localhost:4003/api/payments" `
         -Method POST `
         -ContentType "application/json" `
         -Body $largePaymentBody

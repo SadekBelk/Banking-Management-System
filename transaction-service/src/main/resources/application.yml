@@ -25,9 +25,16 @@ spring:
     init:
       mode: always
 
+# gRPC Server Configuration
+grpc:
+  server:
+    port: ${GRPC_SERVER_PORT:9002}
+
 logging:
   level:
     org.springdoc: DEBUG
+    com.bankingmanagement.transactionservice.grpc: DEBUG
+
 # Actuator Configuration for Health Checks
 management:
   endpoints:

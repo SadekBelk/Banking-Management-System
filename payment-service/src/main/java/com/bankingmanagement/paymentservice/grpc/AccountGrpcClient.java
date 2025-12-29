@@ -24,6 +24,13 @@ import java.util.UUID;
  * - account-service is the BALANCE OWNER (gRPC SERVER)
  * - All balance operations go through this client
  * - Errors are translated from gRPC status codes to domain exceptions
+ * 
+ * AVAILABLE OPERATIONS:
+ * - getAvailableBalance: Check account balance
+ * - reserveBalance: Lock funds (Step 1 of transfer)
+ * - creditBalance: Add funds to destination (Step 2 of transfer)
+ * - commitReservation: Finalize deduction from source (Step 3 of transfer)
+ * - releaseReservation: Rollback/unlock funds
  */
 @Component
 @Slf4j
@@ -127,6 +134,47 @@ public class AccountGrpcClient {
 
         } catch (StatusRuntimeException e) {
             handleGrpcError("CommitReservation", e);
+            throw e;
+        }
+    }
+
+    /**
+     * Credit balance - Add funds to destination account.
+     * This is Step 2 of the transfer flow (after reserving from source).
+     * 
+     * @param accountId Destination account to credit
+     * @param amount Amount to add
+     * @param currency Currency (e.g., "USD")
+     * @param referenceId Reference for audit trail (e.g., reservation_id)
+     * @param description Optional description
+     * @return New balance after credit
+     * @throws AccountNotFoundException if destination account doesn't exist
+     */
+    public BigDecimal creditBalance(UUID accountId, BigDecimal amount, String currency, 
+                                     String referenceId, String description) {
+        log.info("gRPC Client: CreditBalance accountId={}, amount={} {}, referenceId={}", 
+                accountId, amount, currency, referenceId);
+
+        try {
+            CreditBalanceRequest request = CreditBalanceRequest.newBuilder()
+                    .setAccountId(accountId.toString())
+                    .setAmount(Money.newBuilder()
+                            .setAmount(amount.longValue())
+                            .setCurrency(currency)
+                            .build())
+                    .setReferenceId(referenceId)
+                    .setDescription(description != null ? description : "")
+                    .build();
+
+            CreditBalanceResponse response = accountServiceStub.creditBalance(request);
+            
+            BigDecimal newBalance = BigDecimal.valueOf(response.getNewBalance().getAmount());
+            log.info("gRPC Client: CreditBalance success - newBalance={} {}", 
+                    newBalance, response.getNewBalance().getCurrency());
+            return newBalance;
+
+        } catch (StatusRuntimeException e) {
+            handleGrpcError("CreditBalance", e);
             throw e;
         }
     }

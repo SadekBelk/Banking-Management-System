@@ -10,10 +10,13 @@ option java_package = "com.banking.proto.account";
 service AccountService {
   rpc GetBalance(GetBalanceRequest) returns (GetBalanceResponse);
 
-  // Step 1: Prevent double-spend
+  // Step 1: Prevent double-spend (debit source)
   rpc ReserveBalance(ReserveBalanceRequest) returns (ReserveBalanceResponse);
 
-  // Step 3: Permanently deduct money
+  // Step 2: Credit destination account
+  rpc CreditBalance(CreditBalanceRequest) returns (CreditBalanceResponse);
+
+  // Step 3: Permanently deduct money from source
   rpc CommitReservation(CommitReservationRequest) returns (CommitReservationResponse);
 
   // Rollback path (timeouts, failures)
@@ -56,4 +59,17 @@ message ReleaseReservationRequest {
 }
 
 message ReleaseReservationResponse {
+}
+
+// ==================== Credit Balance Messages ====================
+
+message CreditBalanceRequest {
+  string account_id = 1;        // Destination account to credit
+  bank.common.Money amount = 2; // Amount to add
+  string reference_id = 3;      // Reference for audit (e.g., reservation_id or transaction_id)
+  string description = 4;       // Optional description
+}
+
+message CreditBalanceResponse {
+  bank.common.Money new_balance = 1; // New balance after credit
 }

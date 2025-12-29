@@ -8,6 +8,7 @@ import com.bankingmanagement.accountservice.model.Account;
 import com.bankingmanagement.accountservice.model.BalanceReservation;
 import com.bankingmanagement.accountservice.repository.AccountRepository;
 import com.bankingmanagement.accountservice.service.BalanceReservationService;
+import com.bankingmanagement.accountservice.service.AccountService;
 import com.banking.proto.account.*;
 import com.banking.proto.common.Money;
 import io.grpc.Status;
@@ -38,6 +39,7 @@ public class AccountGrpcService extends AccountServiceGrpc.AccountServiceImplBas
 
     private final BalanceReservationService reservationService;
     private final AccountRepository accountRepository;
+    private final AccountService accountService;
 
     /**
      * Get available balance for an account.
@@ -242,6 +244,70 @@ public class AccountGrpcService extends AccountServiceGrpc.AccountServiceImplBas
 
         } catch (Exception e) {
             log.error("gRPC ReleaseReservation unexpected error", e);
+            responseObserver.onError(Status.INTERNAL
+                    .withDescription("Internal error")
+                    .asRuntimeException());
+        }
+    }
+
+    /**
+     * Credit balance - Add funds to destination account.
+     * This completes the transfer by adding money to the recipient.
+     */
+    @Override
+    public void creditBalance(CreditBalanceRequest request, StreamObserver<CreditBalanceResponse> responseObserver) {
+        log.info("gRPC CreditBalance: accountId={}, amount={} {}, referenceId={}", 
+                request.getAccountId(), request.getAmount().getAmount(), 
+                request.getAmount().getCurrency(), request.getReferenceId());
+
+        try {
+            // 1️⃣ Validate request
+            UUID accountId = parseUUID(request.getAccountId(), "account_id");
+            validateMoney(request.getAmount());
+            if (request.getReferenceId() == null || request.getReferenceId().isBlank()) {
+                throw new IllegalArgumentException("reference_id is required");
+            }
+
+            // 2️⃣ Get account
+            Account account = accountRepository.findById(accountId)
+                    .orElseThrow(() -> new AccountNotFoundException("Account not found: " + accountId));
+
+            // 3️⃣ Credit the account (add funds)
+            BigDecimal creditAmount = BigDecimal.valueOf(request.getAmount().getAmount());
+            BigDecimal newBalance = account.getBalance().add(creditAmount);
+            account.setBalance(newBalance);
+            accountRepository.save(account);
+
+            log.info("gRPC CreditBalance: Account {} credited with {} {}. New balance: {}", 
+                    accountId, creditAmount, request.getAmount().getCurrency(), newBalance);
+
+            // 4️⃣ Build response with new balance
+            CreditBalanceResponse response = CreditBalanceResponse.newBuilder()
+                    .setNewBalance(Money.newBuilder()
+                            .setAmount(newBalance.longValue())
+                            .setCurrency(account.getCurrency())
+                            .build())
+                    .build();
+
+            responseObserver.onNext(response);
+            responseObserver.onCompleted();
+
+            log.info("gRPC CreditBalance completed: accountId={}, newBalance={}", accountId, newBalance);
+
+        } catch (AccountNotFoundException e) {
+            log.warn("gRPC CreditBalance failed - account not found: {}", e.getMessage());
+            responseObserver.onError(Status.NOT_FOUND
+                    .withDescription(e.getMessage())
+                    .asRuntimeException());
+
+        } catch (IllegalArgumentException e) {
+            log.warn("gRPC CreditBalance failed - invalid argument: {}", e.getMessage());
+            responseObserver.onError(Status.INVALID_ARGUMENT
+                    .withDescription(e.getMessage())
+                    .asRuntimeException());
+
+        } catch (Exception e) {
+            log.error("gRPC CreditBalance unexpected error", e);
             responseObserver.onError(Status.INTERNAL
                     .withDescription("Internal error")
                     .asRuntimeException());

@@ -1,5 +1,6 @@
 package com.bankingmanagement.paymentservice.service.impl;
 
+import com.banking.proto.transaction.TransactionType;
 import com.bankingmanagement.paymentservice.client.AccountClient;
 import com.bankingmanagement.paymentservice.dto.PaymentRequestDto;
 import com.bankingmanagement.paymentservice.dto.PaymentResponseDto;
@@ -8,10 +9,13 @@ import com.bankingmanagement.paymentservice.exception.InsufficientBalanceExcepti
 import com.bankingmanagement.paymentservice.exception.InvalidPaymentException;
 import com.bankingmanagement.paymentservice.exception.PaymentNotFoundException;
 import com.bankingmanagement.paymentservice.exception.ReservationException;
+import com.bankingmanagement.paymentservice.exception.TransactionException;
 import com.bankingmanagement.paymentservice.grpc.AccountGrpcClient;
+import com.bankingmanagement.paymentservice.grpc.TransactionGrpcClient;
 import com.bankingmanagement.paymentservice.mapper.PaymentMapper;
 import com.bankingmanagement.paymentservice.model.Payment;
 import com.bankingmanagement.paymentservice.model.PaymentStatus;
+import com.bankingmanagement.paymentservice.model.PaymentType;
 import com.bankingmanagement.paymentservice.repository.PaymentRepository;
 import com.bankingmanagement.paymentservice.service.PaymentService;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +24,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -29,15 +34,16 @@ import java.util.UUID;
  * 
  * This service orchestrates the entire payment flow using gRPC:
  * 
- * PAYMENT FLOW:
- * 1️⃣ ReserveBalance (gRPC → account-service) - Lock the money
- * 2️⃣ CreateTransaction (gRPC → transaction-service) - Record in ledger [FUTURE]
- * 3️⃣ CommitReservation (gRPC → account-service) - Permanently deduct
- * 4️⃣ CompleteTransaction (gRPC → transaction-service) - Mark as complete [FUTURE]
+ * PAYMENT FLOW (Full Transfer):
+ * 1️⃣ ReserveBalance (gRPC → account-service) - Lock money from source
+ * 2️⃣ CreateTransaction (gRPC → transaction-service) - Record in ledger as PENDING
+ * 3️⃣ CreditBalance (gRPC → account-service) - Add money to destination
+ * 4️⃣ CommitReservation (gRPC → account-service) - Permanently deduct from source
+ * 5️⃣ CompleteTransaction (gRPC → transaction-service) - Mark ledger entry COMPLETED
  * 
  * ROLLBACK FLOW (if any step fails):
  * - ReleaseReservation (gRPC → account-service) - Unlock the money
- * - FailTransaction (gRPC → transaction-service) - Mark as failed [FUTURE]
+ * - FailTransaction (gRPC → transaction-service) - Mark ledger entry FAILED
  */
 @Service
 @RequiredArgsConstructor
@@ -46,8 +52,9 @@ public class PaymentServiceImpl implements PaymentService {
 
     private final PaymentRepository paymentRepository;
     private final PaymentMapper paymentMapper;
-    private final AccountClient accountClient;           // Legacy HTTP client (for account existence check)
-    private final AccountGrpcClient accountGrpcClient;   // New gRPC client (for balance operations)
+    private final AccountClient accountClient;                // Legacy HTTP client (for account existence check)
+    private final AccountGrpcClient accountGrpcClient;        // gRPC client (for balance operations)
+    private final TransactionGrpcClient transactionGrpcClient; // gRPC client (for ledger operations)
 
     @Value("${account-service.base-url}")
     private String accountServiceBaseUrl;
@@ -200,6 +207,7 @@ public class PaymentServiceImpl implements PaymentService {
         paymentRepository.save(payment);
 
         String reservationId = null;
+        String transactionId = null;
 
         try {
             // ═══════════════════════════════════════════════════════════════════
@@ -219,34 +227,58 @@ public class PaymentServiceImpl implements PaymentService {
             log.info("Step 1 complete: reservationId={}", reservationId);
 
             // ═══════════════════════════════════════════════════════════════════
-            // STEP 2️⃣: CREATE TRANSACTION (gRPC → transaction-service) [FUTURE]
+            // STEP 2️⃣: CREATE TRANSACTION RECORD (gRPC → transaction-service)
             // ═══════════════════════════════════════════════════════════════════
-            log.info("Step 2: Creating transaction record (simulated for now)");
+            log.info("Step 2: Creating transaction record in ledger");
             
-            // TODO: Call transaction-service to create PENDING transaction
-            // String transactionId = transactionGrpcClient.createTransaction(...);
-            String transactionId = "TXN-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+            TransactionGrpcClient.CreateTransactionResult txnResult = transactionGrpcClient.createTransaction(
+                    payment.getSourceAccountId(),
+                    payment.getDestinationAccountId(),
+                    payment.getAmount(),
+                    payment.getCurrency(),
+                    TransactionType.TRANSFER,
+                    payment.getId(),                 // paymentId (UUID)
+                    reservationId,                   // reservationId (String)
+                    payment.getDescription(),        // description (String)
+                    payment.getIdempotencyKey()      // idempotencyKey (String)
+            );
             
+            transactionId = txnResult.transactionId();
             payment.setTransactionId(transactionId);
             paymentRepository.save(payment);
-            log.info("Step 2 complete: transactionId={}", transactionId);
+            log.info("Step 2 complete: transactionId={}, referenceNumber={}", 
+                    transactionId, txnResult.referenceNumber());
 
             // ═══════════════════════════════════════════════════════════════════
-            // STEP 3️⃣: COMMIT RESERVATION (gRPC → account-service)
+            // STEP 3️⃣: CREDIT DESTINATION ACCOUNT (gRPC → account-service)
             // ═══════════════════════════════════════════════════════════════════
-            log.info("Step 3: Committing reservation (permanently deducting from source)");
+            log.info("Step 3: Crediting destination account");
+            
+            BigDecimal newDestBalance = accountGrpcClient.creditBalance(
+                    payment.getDestinationAccountId(),
+                    payment.getAmount(),
+                    payment.getCurrency(),
+                    transactionId,  // Use transaction ID for audit trail
+                    payment.getDescription()
+            );
+            
+            log.info("Step 3 complete: destination credited, newBalance={}", newDestBalance);
+
+            // ═══════════════════════════════════════════════════════════════════
+            // STEP 4️⃣: COMMIT RESERVATION (gRPC → account-service)
+            // ═══════════════════════════════════════════════════════════════════
+            log.info("Step 4: Committing reservation (permanently deducting from source)");
             
             accountGrpcClient.commitReservation(reservationId, transactionId);
-            log.info("Step 3 complete: reservation committed");
+            log.info("Step 4 complete: reservation committed");
 
             // ═══════════════════════════════════════════════════════════════════
-            // STEP 4️⃣: COMPLETE TRANSACTION (gRPC → transaction-service) [FUTURE]
+            // STEP 5️⃣: COMPLETE TRANSACTION (gRPC → transaction-service)
             // ═══════════════════════════════════════════════════════════════════
-            log.info("Step 4: Completing transaction (simulated for now)");
+            log.info("Step 5: Completing transaction record");
             
-            // TODO: Call transaction-service to mark transaction COMPLETED
-            // transactionGrpcClient.completeTransaction(transactionId);
-            log.info("Step 4 complete: transaction marked complete");
+            transactionGrpcClient.completeTransaction(transactionId);
+            log.info("Step 5 complete: transaction marked as COMPLETED");
 
             // ═══════════════════════════════════════════════════════════════════
             // SUCCESS! Payment completed
@@ -255,8 +287,8 @@ public class PaymentServiceImpl implements PaymentService {
             payment.setProcessedAt(Instant.now());
             payment.setUpdatedAt(Instant.now());
             
-            log.info("Payment processing SUCCESS: paymentId={}, reference={}", 
-                    payment.getId(), payment.getReferenceNumber());
+            log.info("Payment processing SUCCESS: paymentId={}, transactionId={}, reference={}", 
+                    payment.getId(), transactionId, payment.getReferenceNumber());
 
         } catch (InsufficientBalanceException e) {
             // Insufficient balance - no reservation was made, just fail
@@ -272,15 +304,20 @@ public class PaymentServiceImpl implements PaymentService {
             payment.setFailureReason("Account not found: " + e.getMessage());
             payment.setUpdatedAt(Instant.now());
 
+        } catch (TransactionException e) {
+            // Transaction service error - rollback reservation and fail transaction
+            log.error("Payment failed - transaction error: {}", e.getMessage());
+            handleRollback(payment, reservationId, transactionId, "Transaction error: " + e.getMessage());
+
         } catch (ReservationException e) {
             // Reservation issue - need to check if we need to release
             log.error("Payment failed - reservation error: {}", e.getMessage());
-            handleRollback(payment, reservationId, "Reservation error: " + e.getMessage());
+            handleRollback(payment, reservationId, transactionId, "Reservation error: " + e.getMessage());
 
         } catch (Exception e) {
             // Unexpected error - try to rollback
             log.error("Payment failed - unexpected error: {}", e.getMessage(), e);
-            handleRollback(payment, reservationId, "Unexpected error: " + e.getMessage());
+            handleRollback(payment, reservationId, transactionId, "Unexpected error: " + e.getMessage());
         }
 
         Payment savedPayment = paymentRepository.save(payment);
@@ -289,12 +326,25 @@ public class PaymentServiceImpl implements PaymentService {
 
     /**
      * Handle rollback when payment fails after reservation was made.
-     * Releases the reserved balance back to available.
+     * Releases the reserved balance back to available and marks transaction as failed.
      */
-    private void handleRollback(Payment payment, String reservationId, String reason) {
+    private void handleRollback(Payment payment, String reservationId, String transactionId, String reason) {
         payment.setStatus(PaymentStatus.FAILED);
         payment.setFailureReason(reason);
         payment.setUpdatedAt(Instant.now());
+
+        // If transaction was created, mark it as failed
+        if (transactionId != null) {
+            try {
+                log.info("Rolling back: marking transaction {} as FAILED", transactionId);
+                transactionGrpcClient.failTransaction(transactionId, reason);
+                log.info("Rollback: transaction marked as FAILED");
+            } catch (Exception txnError) {
+                // Log but don't throw - payment is already failed
+                log.error("Failed to mark transaction as failed during rollback: {}", 
+                        txnError.getMessage(), txnError);
+            }
+        }
 
         // If reservation was made, release it
         if (reservationId != null) {
