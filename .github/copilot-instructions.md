@@ -9,14 +9,27 @@ This is a **microservices-based digital banking system** using Spring Boot 3.5+ 
 |---------|-----------|-----------|----------|------|
 | customer-service | 4000 | - | customerdb:5432 | Customer management (REST only) |
 | account-service | 4001 | 9001 | accountdb:5433 | Balance owner, **gRPC server** |
-| transaction-service | 4002 | - | transactiondb:5434 | Ledger/audit trail |
+| transaction-service | 4002 | 9002 | transactiondb:5434 | Ledger/audit trail, **gRPC server** |
 | payment-service | 4003 | - | paymentdb:5435 | Payment orchestrator, **gRPC client** |
 
-### Critical Data Flow: Payment Processing
+### Critical Data Flow: Payment Processing (5-Step gRPC Flow)
 ```
-payment-service (orchestrator) → gRPC → account-service (balance owner)
-                                          ↓
-                              ReserveBalance → CommitReservation
+payment-service (orchestrator)
+    │
+    ├─ Step 1 → gRPC → account-service.ReserveBalance()
+    │                  (holds funds, returns reservationId)
+    │
+    ├─ Step 2 → gRPC → transaction-service.CreateTransaction()
+    │                  (creates PENDING ledger entry, returns transactionId)
+    │
+    ├─ Step 3 → gRPC → account-service.CreditBalance()
+    │                  (adds funds to destination)
+    │
+    ├─ Step 4 → gRPC → account-service.CommitReservation()
+    │                  (permanently deducts from source)
+    │
+    └─ Step 5 → gRPC → transaction-service.CompleteTransaction()
+                       (marks transaction as COMPLETED)
 ```
 The reservation pattern prevents double-spending: `ReserveBalance` → `CommitReservation` OR `ReleaseReservation`.
 
@@ -127,3 +140,157 @@ HTTP request files in `api-request/` directory. Key integration test:
 2. **Docker networking**: Services reference each other by container name (e.g., `account-service:9001`), not `localhost`
 3. **Lombok + MapStruct order**: Annotation processor order matters - see `pom.xml` for correct setup
 4. **gRPC port vs HTTP port**: account-service exposes BOTH 4001 (REST) and 9001 (gRPC)
+
+## Implementation Decisions & Lessons Learned
+
+### gRPC Dependency Management (CRITICAL)
+**DO NOT** explicitly specify gRPC library versions in service `pom.xml` files. Let `grpc-server-spring-boot-starter` manage transitive dependencies.
+
+❌ **Wrong** (causes `ClassNotFoundException: io.grpc.InternalConfiguratorRegistry`):
+```xml
+<dependency>
+    <groupId>net.devh</groupId>
+    <artifactId>grpc-server-spring-boot-starter</artifactId>
+    <version>3.1.0.RELEASE</version>
+</dependency>
+<!-- DON'T add these - they conflict with the starter -->
+<dependency>
+    <groupId>io.grpc</groupId>
+    <artifactId>grpc-netty-shaded</artifactId>
+    <version>1.69.0</version>
+</dependency>
+```
+
+✅ **Correct** (let starter manage versions):
+```xml
+<dependency>
+    <groupId>net.devh</groupId>
+    <artifactId>grpc-server-spring-boot-starter</artifactId>
+    <version>3.1.0.RELEASE</version>
+</dependency>
+<!-- No explicit grpc-* dependencies needed -->
+```
+
+### banking-proto Module Version
+The `banking-proto` module uses version `1.0.0`. All services must reference this exact version:
+```xml
+<dependency>
+    <groupId>com.BankingManagement</groupId>
+    <artifactId>banking-proto</artifactId>
+    <version>1.0.0</version>
+</dependency>
+```
+
+### UUID-Based Entity IDs
+All entities use UUID primary keys with JPA auto-generation:
+```java
+@Id
+@GeneratedValue(strategy = GenerationType.UUID)
+private UUID id;
+```
+Proto messages use `string` for IDs, convert with `UUID.fromString()` / `uuid.toString()`.
+
+### Timestamp Handling
+- **Java entities**: Use `java.time.Instant` (not `LocalDateTime`)
+- **Proto messages**: Use `google.protobuf.Timestamp`
+- **Conversion**: `Timestamps.fromMillis(instant.toEpochMilli())` and `Instant.ofEpochSecond(ts.getSeconds(), ts.getNanos())`
+
+### gRPC Client Configuration Pattern
+In `application.yml` for gRPC clients:
+```yaml
+grpc:
+  client:
+    account-service:
+      address: static://account-service:9001    # Docker
+      negotiationType: plaintext
+    transaction-service:
+      address: static://transaction-service:9002
+      negotiationType: plaintext
+```
+For local development, use `static://localhost:900X`.
+
+### Rollback Handling in Payment Flow
+If any step fails after reservation, the `handleRollback()` method:
+1. Releases the reservation via `account-service.ReleaseReservation()`
+2. Fails the transaction via `transaction-service.FailTransaction()` (if created)
+3. Updates payment status to `FAILED` with reason
+
+### Proto File Organization
+Proto files in `banking-proto/src/main/proto/`:
+- `account.proto` - ReserveBalance, CreditBalance, CommitReservation, ReleaseReservation
+- `transaction.proto` - CreateTransaction, CompleteTransaction, FailTransaction, GetTransaction
+
+Each proto uses package `bank.{domain}` and `java_package = "com.banking.proto.{domain}"`.
+
+## Kafka Event-Driven Architecture
+
+### Overview
+The system uses **Apache Kafka** for asynchronous event publishing. Services publish domain events after state changes, enabling:
+- Audit trail and compliance logging
+- Future event sourcing capabilities
+- Decoupled notification/analytics services
+
+### Kafka Infrastructure
+```yaml
+# Docker Compose profile: kafka, grpc, full
+kafka:        # Apache Kafka 3.7+ with KRaft (no Zookeeper)
+  port: 9092  # External (host machine)
+  port: 9093  # Internal (Docker network)
+kafka-ui:     # Provectus Kafka UI for debugging
+  port: 8090  # http://localhost:8090
+```
+
+### Topics
+| Topic | Producer | Events |
+|-------|----------|--------|
+| `banking.transactions.events` | transaction-service | TRANSACTION_CREATED, TRANSACTION_COMPLETED, TRANSACTION_FAILED |
+| `banking.payments.events` | payment-service | PAYMENT_INITIATED, PAYMENT_PROCESSING, PAYMENT_COMPLETED, PAYMENT_FAILED, PAYMENT_CANCELLED |
+
+### Event Structure
+All events follow a consistent structure:
+```java
+{
+  "eventId": "uuid",           // Unique event ID
+  "eventType": "EVENT_NAME",   // e.g., PAYMENT_COMPLETED
+  "eventTimestamp": "instant", // When event occurred
+  "eventVersion": "1.0",       // Schema version
+  // ... domain-specific fields
+}
+```
+
+### Partitioning Strategy
+- **Transaction events**: Partitioned by `transactionId` (ordering per transaction)
+- **Payment events**: Partitioned by `paymentId` (ordering per payment)
+
+### Key Classes
+| Service | Class | Purpose |
+|---------|-------|---------|
+| transaction-service | `TransactionEvent` | Event DTO |
+| transaction-service | `TransactionEventPublisher` | Publishes to Kafka |
+| transaction-service | `KafkaConfig` | Topic configuration |
+| payment-service | `PaymentEvent` | Event DTO |
+| payment-service | `PaymentEventPublisher` | Publishes to Kafka |
+| payment-service | `KafkaConfig` | Topic configuration |
+
+### Configuration
+```yaml
+spring:
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:kafka:9093}
+    producer:
+      acks: all              # Wait for all replicas
+      retries: 3             # Retry on failure
+      properties:
+        enable.idempotence: true  # Exactly-once semantics
+```
+
+For local development, use `localhost:9092`.
+
+## Version History
+
+| Date | Change | Impact |
+|------|--------|--------|
+| Dec 2025 | Added Kafka event publishing | transaction-service and payment-service now publish domain events to Kafka |
+| Dec 2025 | Added transaction-service as gRPC server | payment-service now calls both account-service AND transaction-service via gRPC |
+| Dec 2025 | Implemented 5-step payment flow | Full reservation + transaction ledger pattern |
+| Dec 2025 | Fixed gRPC version conflicts | Removed explicit grpc-* deps, use starter's transitive deps |
