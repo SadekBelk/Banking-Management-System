@@ -3,7 +3,7 @@ syntax = "proto3";
 package bank.common;
 
 option java_multiple_files = true;
-option java_package = "com.bankingmanagement.proto.common";
+option java_package = "com.banking.proto.common";
 //option java_outer_classname = "CommonProto"; // Prevents ugly generated names
 
 message Money {
@@ -11,10 +11,10 @@ message Money {
   int64 amount = 2;
 }
 
-message ErrorResponse {
-  string code = 1;
-  string message = 2;
-}
+//message ErrorResponse {
+//  string code = 1;
+//  string message = 2;
+//}
 
 
 //    ✅ Rule 1: Requests contain only what the server needs

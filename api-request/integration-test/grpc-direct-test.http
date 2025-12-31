@@ -1,0 +1,98 @@
+### =============================================================================
+### Direct gRPC Testing for account-service
+### =============================================================================
+### 
+### IMPORTANT: This file requires JetBrains IDE (IntelliJ IDEA, WebStorm, etc.)
+### VS Code REST Client does NOT support gRPC protocol.
+###
+### For VS Code users: Use grpcurl CLI or run the grpc-test.ps1 script
+###
+### Prerequisites:
+### 1. account-service running with gRPC on port 9001
+### 2. First create an account via REST API to get an account ID
+### =============================================================================
+
+### ============================================
+### SERVICE: bank.account.AccountService
+### Port: 9001 (gRPC)
+### ============================================
+
+### --------------------------------------------
+### 1. Get Balance
+### --------------------------------------------
+### Returns the available balance for an account
+### Available = Actual Balance - Pending Reservations
+
+GRPC localhost:9001/bank.account.AccountService/GetBalance
+
+{
+  "account_id": "REPLACE_WITH_ACCOUNT_UUID"
+}
+
+### --------------------------------------------
+### 2. Reserve Balance (Step 1 of Payment)
+### --------------------------------------------
+### Locks money without deducting it
+### Used by payment-service before processing payment
+
+GRPC localhost:9001/bank.account.AccountService/ReserveBalance
+
+{
+  "account_id": "REPLACE_WITH_ACCOUNT_UUID",
+  "amount": {
+    "amount": 10000,
+    "currency": "USD"
+  },
+  "idempotency_key": "test-reservation-001"
+}
+
+### Response: { "reservation_id": "uuid-of-reservation" }
+
+### --------------------------------------------
+### 3. Commit Reservation (Step 2 of Payment)
+### --------------------------------------------
+### Permanently deducts the reserved money
+### Called after payment is confirmed
+
+GRPC localhost:9001/bank.account.AccountService/CommitReservation
+
+{
+  "reservation_id": "REPLACE_WITH_RESERVATION_UUID",
+  "transaction_id": "txn-001"
+}
+
+### --------------------------------------------
+### 4. Release Reservation (Rollback)
+### --------------------------------------------
+### Cancels a reservation and unlocks the money
+### Used when payment fails or times out
+
+GRPC localhost:9001/bank.account.AccountService/ReleaseReservation
+
+{
+  "reservation_id": "REPLACE_WITH_RESERVATION_UUID",
+  "reason": "Payment cancelled by user"
+}
+
+### =============================================================================
+### TESTING FLOW EXAMPLE
+### =============================================================================
+###
+### 1. Create account via REST:
+###    POST http://localhost:4001/api/accounts
+###    { "customerId": "...", "type": "CHECKING", "initialBalance": 1000.00 }
+###
+### 2. Get balance via gRPC:
+###    GRPC GetBalance with account_id from step 1
+###
+### 3. Reserve $100:
+###    GRPC ReserveBalance with amount=10000 (cents), get reservation_id
+###
+### 4. Check balance again:
+###    Available balance should be $900 (original - reserved)
+###
+### 5. Commit or Release:
+###    - CommitReservation: Balance permanently reduced
+###    - ReleaseReservation: Money unlocked, balance restored
+###
+### =============================================================================

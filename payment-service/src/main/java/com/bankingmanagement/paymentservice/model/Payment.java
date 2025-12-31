@@ -62,6 +62,28 @@ public class Payment {
     @Column(name = "failure_reason", length = 500)
     private String failureReason;
 
+    /**
+     * The balance reservation ID from account-service.
+     * This links the payment to the reserved funds.
+     * Set during payment processing, used for commit/rollback.
+     */
+    @Column(name = "reservation_id")
+    private String reservationId;
+
+    /**
+     * The transaction ID from transaction-service.
+     * This links the payment to the ledger entry.
+     */
+    @Column(name = "transaction_id")
+    private String transactionId;
+
+    /**
+     * Idempotency key for the balance reservation.
+     * Prevents duplicate reservations on retry.
+     */
+    @Column(name = "idempotency_key", unique = true)
+    private String idempotencyKey;
+
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private Instant createdAt;

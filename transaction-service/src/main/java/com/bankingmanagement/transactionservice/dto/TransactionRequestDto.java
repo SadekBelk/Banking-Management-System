@@ -1,72 +1,51 @@
 package com.bankingmanagement.transactionservice.dto;
 
+import com.bankingmanagement.transactionservice.model.TransactionType;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 
-import com.bankingmanagement.transactionservice.model.TransactionType;
-
+/**
+ * Request DTO for creating a transaction.
+ * 
+ * Note: Most transactions are created via gRPC from payment-service.
+ * This DTO is for REST API compatibility (e.g., manual adjustments).
+ */
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class TransactionRequestDto {
 
     @NotNull(message = "Source account ID is required")
-    private Long fromAccountId;
+    private UUID sourceAccountId;
 
     @NotNull(message = "Destination account ID is required")
-    private Long toAccountId;
+    private UUID destinationAccountId;
 
     @NotNull(message = "Amount is required")
     @Positive(message = "Amount must be positive")
     private BigDecimal amount;
 
-    @NotNull(message = "Transaction type is required")
-    private TransactionType transactionType; // TRANSFER, DEPOSIT, WITHDRAWAL
+    @NotNull(message = "Currency is required")
+    @Size(min = 3, max = 3, message = "Currency must be 3 characters")
+    private String currency;
 
+    @NotNull(message = "Transaction type is required")
+    private TransactionType type;
+
+    @Size(max = 500, message = "Description cannot exceed 500 characters")
     private String description;
 
-    // 🔒 id, status, createdAt, updatedAt are NOT allowed from client
-
-    /* =========================
-       Getters & Setters
-       ========================= */
-
-    public Long getFromAccountId() {
-        return fromAccountId;
-    }
-
-    public void setFromAccountId(Long fromAccountId) {
-        this.fromAccountId = fromAccountId;
-    }
-
-    public Long getToAccountId() {
-        return toAccountId;
-    }
-
-    public void setToAccountId(Long toAccountId) {
-        this.toAccountId = toAccountId;
-    }
-
-    public BigDecimal getAmount() {
-        return amount;
-    }
-
-    public void setAmount(BigDecimal amount) {
-        this.amount = amount;
-    }
-
-    public TransactionType getTransactionType() {
-        return transactionType;
-    }
-
-    public void setTransactionType(TransactionType transactionType) {
-        this.transactionType = transactionType;
-    }
-
-    public String getDescription() {
-        return description;
-    }
-
-    public void setDescription(String description) {
-        this.description = description;
-    }
+    // Optional fields for payment integration
+    private UUID paymentId;
+    private UUID reservationId;
+    private String idempotencyKey;
 }

@@ -21,6 +21,9 @@ public interface PaymentMapper {
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "processedAt", ignore = true)
+    @Mapping(target = "reservationId", ignore = true)
+    @Mapping(target = "transactionId", ignore = true)
+    @Mapping(target = "idempotencyKey", ignore = true)
     Payment toEntity(PaymentRequestDto dto);
 
     /* =========================
@@ -43,6 +46,9 @@ public interface PaymentMapper {
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "processedAt", ignore = true)
+    @Mapping(target = "reservationId", ignore = true)
+    @Mapping(target = "transactionId", ignore = true)
+    @Mapping(target = "idempotencyKey", ignore = true)
     void updateEntityFromDto(
             PaymentRequestDto dto,
             @MappingTarget Payment payment

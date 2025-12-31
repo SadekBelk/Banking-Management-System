@@ -1,0 +1,146 @@
+### =============================================================================
+### gRPC Integration Test: payment-service → account-service
+### =============================================================================
+### Prerequisites:
+### 1. Start account-service: cd account-service && mvnw spring-boot:run -Dspring-boot.run.profiles=local
+###    - HTTP: localhost:4001
+###    - gRPC: localhost:9001
+### 2. Start payment-service: cd payment-service && mvnw spring-boot:run -Dspring-boot.run.profiles=local
+###    - HTTP: localhost:4003
+### =============================================================================
+
+### ============================================
+### STEP 1: Create Source Account (sender)
+### ============================================
+### This account will have $1000 balance to send payments from
+
+POST http://localhost:4001/api/accounts
+Content-Type: application/json
+
+{
+    "customerId": "123e4567-e89b-12d3-a456-426614174000",
+    "type": "CHECKING",
+    "currency": "USD",
+    "initialBalance": 1000.00
+}
+
+### Response: Save the "id" as SOURCE_ACCOUNT_ID
+
+### ============================================
+### STEP 2: Create Destination Account (receiver)
+### ============================================
+### This account will receive the payment
+
+POST http://localhost:4001/api/accounts
+Content-Type: application/json
+
+{
+    "customerId": "123e4567-e89b-12d3-a456-426614174001",
+    "type": "CHECKING",
+    "currency": "USD",
+    "initialBalance": 1.00
+}
+
+### Response: Save the "id" as DESTINATION_ACCOUNT_ID
+
+### ============================================
+### STEP 3: Verify Source Account Balance
+### ============================================
+### Replace {SOURCE_ACCOUNT_ID} with the actual ID from Step 1
+
+GET http://localhost:4001/api/accounts/3d0665d3-856f-46bf-a69e-89d450238b4b
+Accept: application/json
+
+### Expected: balance = 1000.00
+
+### ============================================
+### STEP 4: Make Payment via gRPC Integration
+### ============================================
+### This will trigger the full gRPC flow:
+### payment-service → gRPC → account-service
+### 
+### Flow:
+### 1. ReserveBalance (gRPC) - reserves $100 from source account
+### 2. Create Payment (PENDING)
+### 3. CommitReservation (gRPC) - deducts balance
+### 4. Complete Payment (COMPLETED)
+###
+### Replace SOURCE_ACCOUNT_ID and DESTINATION_ACCOUNT_ID with actual IDs
+
+POST http://localhost:4003/api/payments
+Content-Type: application/json
+
+{
+    "sourceAccountId": "3d0665d3-856f-46bf-a69e-89d450238b4b",
+    "destinationAccountId": "cd320bd9-aec0-4788-aecb-ee82f37a2f30",
+    "amount": 100.00,
+    "currency": "USD",
+    "type": "TRANSFER",
+    "description": "Test gRPC integration transfer"
+}
+
+### Expected Response:
+### - status: "COMPLETED" (or "PROCESSING" depending on implementation)
+### - reservationId: should be populated (from gRPC call)
+### - referenceNumber: generated UUID
+
+### ============================================
+### STEP 5: Verify Balance After Payment
+### ============================================
+### Source account should now have $900 ($1000 - $100)
+
+GET http://localhost:4001/api/accounts/3d0665d3-856f-46bf-a69e-89d450238b4b
+Accept: application/json
+
+### Expected: balance = 900.00
+
+### ============================================
+### STEP 6: Verify Destination Account Balance
+### ============================================
+### Note: In this setup, destination credit is NOT implemented yet
+### The gRPC only handles source account debit
+
+GET http://localhost:4001/api/accounts/cd320bd9-aec0-4788-aecb-ee82f37a2f30
+Accept: application/json
+
+### ============================================
+### STEP 7: Test Insufficient Balance
+### ============================================
+### Try to send more than available balance
+
+POST http://localhost:4003/api/payments
+Content-Type: application/json
+
+{
+    "sourceAccountId": "3d0665d3-856f-46bf-a69e-89d450238b4b",
+    "destinationAccountId": "cd320bd9-aec0-4788-aecb-ee82f37a2f30",
+    "amount": 5000.00,
+    "currency": "USD",
+    "type": "TRANSFER",
+    "description": "Should fail - insufficient balance"
+}
+
+### Expected: 400 Bad Request with "Insufficient balance" error
+
+### ============================================
+### STEP 8: Get Payment Details
+### ============================================
+### Replace {PAYMENT_ID} with the ID from Step 4
+
+GET http://localhost:4003/api/payments/{PAYMENT_ID}
+Accept: application/json
+
+### ============================================
+### STEP 9: Get All Payments for Source Account
+### ============================================
+
+GET http://localhost:4003/api/payments/account/3d0665d3-856f-46bf-a69e-89d450238b4b
+Accept: application/json
+
+### ============================================
+### STEP 10: Check Balance Reservations on Account Service
+### ============================================
+### This shows the reservation records created via gRPC
+
+GET http://localhost:4001/api/accounts/3d0665d3-856f-46bf-a69e-89d450238b4b
+Accept: application/json

@@ -5,21 +5,112 @@ package bank.transaction;
 import "common.proto";
 
 option java_multiple_files = true;
-option java_package = "com.bankingmanagement.proto.transaction";
+option java_package = "com.banking.proto.transaction";
 
+/**
+ * TransactionService - gRPC Server for the Ledger/Audit Trail
+ * 
+ * This service owns the transaction records and provides:
+ * - Recording transactions for audit/compliance
+ * - Transaction status management
+ * - Transaction queries
+ * 
+ * ARCHITECTURAL ROLE:
+ * - transaction-service is the LEDGER OWNER (gRPC SERVER)
+ * - payment-service is the ORCHESTRATOR (gRPC CLIENT)
+ */
 service TransactionService {
+  // Record a new transaction in the ledger (Step 2 of payment flow)
   rpc CreateTransaction(CreateTransactionRequest) returns (CreateTransactionResponse);
+
+  // Mark transaction as completed (Step 4 of payment flow)
+  rpc CompleteTransaction(CompleteTransactionRequest) returns (CompleteTransactionResponse);
+  
+  // Mark transaction as failed (rollback path)
+  rpc FailTransaction(FailTransactionRequest) returns (FailTransactionResponse);
+  
+  // Get transaction by ID
+  rpc GetTransaction(GetTransactionRequest) returns (GetTransactionResponse);
 }
 
+// ==================== Transaction Type Enum ====================
+
+enum TransactionType {
+  TRANSACTION_TYPE_UNSPECIFIED = 0;
+  TRANSFER = 1;
+  DEPOSIT = 2;
+  WITHDRAWAL = 3;
+  BILL_PAYMENT = 4;
+  P2P = 5;
+  REFUND = 6;
+}
+
+// ==================== Transaction Status Enum ====================
+
+enum TransactionStatus {
+  TRANSACTION_STATUS_UNSPECIFIED = 0;
+  PENDING = 1;
+  COMPLETED = 2;
+  FAILED = 3;
+}
+
+// ==================== Create Transaction ====================
+
 message CreateTransactionRequest {
-  string from_account_id = 1;
-  string to_account_id = 2;
-  bank.common.Money amount = 3;
-  string reference = 4; // optional note
+  string source_account_id = 1;       // UUID of source account
+  string destination_account_id = 2;  // UUID of destination account
+  bank.common.Money amount = 3;       // Amount and currency
+  TransactionType type = 4;           // Type of transaction
+  string payment_id = 5;              // Reference to payment-service payment
+  string reservation_id = 6;          // Reference to account-service reservation
+  string description = 7;             // Optional description
+  string idempotency_key = 8;         // For idempotent creation
 }
 
 message CreateTransactionResponse {
+  string transaction_id = 1;          // Generated transaction ID (UUID)
+  string reference_number = 2;        // Human-readable reference (TXN-XXXXX)
+  TransactionStatus status = 3;       // Should be PENDING
+}
+
+// ==================== Complete Transaction ====================
+
+message CompleteTransactionRequest {
   string transaction_id = 1;
-  string status = 2; // PENDING, COMPLETED, FAILED
-  bank.common.ErrorResponse error = 3;
+}
+
+message CompleteTransactionResponse {
+  TransactionStatus status = 1;       // Should be COMPLETED
+}
+
+// ==================== Fail Transaction ====================
+
+message FailTransactionRequest {
+  string transaction_id = 1;
+  string failure_reason = 2;          // Why it failed
+}
+
+message FailTransactionResponse {
+  TransactionStatus status = 1;       // Should be FAILED
+}
+
+// ==================== Get Transaction ====================
+
+message GetTransactionRequest {
+  string transaction_id = 1;
+}
+
+message GetTransactionResponse {
+  string transaction_id = 1;
+  string reference_number = 2;
+  string source_account_id = 3;
+  string destination_account_id = 4;
+  bank.common.Money amount = 5;
+  TransactionType type = 6;
+  TransactionStatus status = 7;
+  string payment_id = 8;
+  string description = 9;
+  int64 created_at = 10;              // Unix timestamp millis
+  int64 updated_at = 11;              // Unix timestamp millis
+  string failure_reason = 12;         // Only set if status is FAILED
 }

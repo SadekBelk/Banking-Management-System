@@ -4,6 +4,22 @@ server:
 account-service:
   base-url: http://account-service:4001 # ? Docker service name
 
+# gRPC Client Configuration
+grpc:
+  client:
+    account-service:
+      address: static://account-service:9001  # Docker service name + gRPC port
+      negotiation-type: plaintext             # No TLS for internal communication
+      enable-keep-alive: true
+      keep-alive-time: 30s
+      keep-alive-timeout: 10s
+    transaction-service:
+      address: static://transaction-service:9002  # Docker service name + gRPC port
+      negotiation-type: plaintext
+      enable-keep-alive: true
+      keep-alive-time: 30s
+      keep-alive-timeout: 10s
+
 spring:
   application:
     name: payment-service
@@ -31,3 +47,13 @@ spring:
 logging:
   level:
     org.springdoc: DEBUG
+
+# Actuator Configuration for Health Checks
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always

@@ -1,0 +1,51 @@
+# Local Development Profile for payment-service
+# Run with: mvn spring-boot:run -Dspring-boot.run.profiles=local
+
+server:
+  port: 4003
+
+account-service:
+  base-url: http://localhost:4001
+
+# gRPC Client Configuration - Local Development
+grpc:
+  client:
+    account-service:
+      address: static://localhost:9001  # Local account-service gRPC port
+      negotiation-type: plaintext
+
+spring:
+  application:
+    name: payment-service
+
+  # H2 In-Memory Database for local testing
+  datasource:
+    url: jdbc:h2:mem:paymentdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+  jpa:
+    defer-datasource-initialization: true
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+  sql:
+    init:
+      mode: never  # Don't run data.sql for local
+
+logging:
+  level:
+    org.springdoc: DEBUG
+    com.bankingmanagement.paymentservice.grpc: DEBUG
+    net.devh.boot.grpc: DEBUG
