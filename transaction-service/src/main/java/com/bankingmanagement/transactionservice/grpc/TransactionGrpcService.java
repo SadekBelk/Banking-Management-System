@@ -2,6 +2,7 @@ package com.bankingmanagement.transactionservice.grpc;
 
 import com.banking.proto.common.Money;
 import com.banking.proto.transaction.*;
+import com.bankingmanagement.transactionservice.event.TransactionEventPublisher;
 import com.bankingmanagement.transactionservice.model.Transaction;
 import com.bankingmanagement.transactionservice.model.TransactionStatus;
 import com.bankingmanagement.transactionservice.model.TransactionType;
@@ -35,6 +36,7 @@ import java.util.UUID;
 public class TransactionGrpcService extends TransactionServiceGrpc.TransactionServiceImplBase {
 
     private final TransactionRepository transactionRepository;
+    private final TransactionEventPublisher eventPublisher;
 
     /**
      * Create a new transaction in the ledger.
@@ -87,7 +89,10 @@ public class TransactionGrpcService extends TransactionServiceGrpc.TransactionSe
             log.info("gRPC CreateTransaction: Created transaction={}, reference={}", 
                     saved.getId(), saved.getReferenceNumber());
 
-            // 4️⃣ Return response
+            // 5️⃣ Publish Kafka event
+            eventPublisher.publishTransactionCreated(saved);
+
+            // 6️⃣ Return response
             responseObserver.onNext(buildCreateResponse(saved));
             responseObserver.onCompleted();
 
@@ -132,6 +137,9 @@ public class TransactionGrpcService extends TransactionServiceGrpc.TransactionSe
             transaction.setStatus(TransactionStatus.COMPLETED);
             transaction.setCompletedAt(Instant.now());
             transactionRepository.save(transaction);
+
+            // Publish Kafka event
+            eventPublisher.publishTransactionCompleted(transaction);
 
             log.info("gRPC CompleteTransaction: Transaction {} marked COMPLETED", transactionId);
 
@@ -187,6 +195,9 @@ public class TransactionGrpcService extends TransactionServiceGrpc.TransactionSe
             transaction.setStatus(TransactionStatus.FAILED);
             transaction.setFailureReason(request.getFailureReason());
             transactionRepository.save(transaction);
+
+            // Publish Kafka event
+            eventPublisher.publishTransactionFailed(transaction, request.getFailureReason());
 
             log.info("gRPC FailTransaction: Transaction {} marked FAILED", transactionId);
 

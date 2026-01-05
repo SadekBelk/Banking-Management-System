@@ -44,9 +44,28 @@ spring:
     init:
       mode: always
 
+  # ========================================================================================
+  # Kafka Configuration
+  # ========================================================================================
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:kafka:9093}
+    producer:
+      acks: all
+      retries: 3
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        enable.idempotence: true
+        max.in.flight.requests.per.connection: 5
+    topic:
+      partitions: 3
+      replication-factor: 1
+
 logging:
   level:
     org.springdoc: DEBUG
+    com.bankingmanagement.paymentservice.event: DEBUG
+    org.apache.kafka: WARN
 
 # Actuator Configuration for Health Checks
 management:

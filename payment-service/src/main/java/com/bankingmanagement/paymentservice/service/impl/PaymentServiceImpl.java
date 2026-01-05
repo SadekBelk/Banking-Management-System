@@ -4,6 +4,7 @@ import com.banking.proto.transaction.TransactionType;
 import com.bankingmanagement.paymentservice.client.AccountClient;
 import com.bankingmanagement.paymentservice.dto.PaymentRequestDto;
 import com.bankingmanagement.paymentservice.dto.PaymentResponseDto;
+import com.bankingmanagement.paymentservice.event.PaymentEventPublisher;
 import com.bankingmanagement.paymentservice.exception.AccountNotFoundException;
 import com.bankingmanagement.paymentservice.exception.InsufficientBalanceException;
 import com.bankingmanagement.paymentservice.exception.InvalidPaymentException;
@@ -55,6 +56,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final AccountClient accountClient;                // Legacy HTTP client (for account existence check)
     private final AccountGrpcClient accountGrpcClient;        // gRPC client (for balance operations)
     private final TransactionGrpcClient transactionGrpcClient; // gRPC client (for ledger operations)
+    private final PaymentEventPublisher eventPublisher;       // Kafka event publisher
 
     @Value("${account-service.base-url}")
     private String accountServiceBaseUrl;
@@ -106,7 +108,10 @@ public class PaymentServiceImpl implements PaymentService {
         log.info("Payment created: id={}, reference={}, idempotencyKey={}", 
                 savedPayment.getId(), savedPayment.getReferenceNumber(), savedPayment.getIdempotencyKey());
 
-        // 6️⃣ Return response DTO
+        // 6️⃣ Publish Kafka event - PAYMENT_INITIATED
+        eventPublisher.publishPaymentInitiated(savedPayment);
+
+        // 7️⃣ Return response DTO
         return paymentMapper.toResponseDto(savedPayment);
     }
 
@@ -182,6 +187,9 @@ public class PaymentServiceImpl implements PaymentService {
         Payment savedPayment = paymentRepository.save(payment);
         log.info("Payment cancelled: paymentId={}, reference={}", 
                 payment.getId(), payment.getReferenceNumber());
+
+        // Publish Kafka event - PAYMENT_CANCELLED
+        eventPublisher.publishPaymentCancelled(savedPayment);
         
         return paymentMapper.toResponseDto(savedPayment);
     }
@@ -205,6 +213,9 @@ public class PaymentServiceImpl implements PaymentService {
         payment.setStatus(PaymentStatus.PROCESSING);
         payment.setUpdatedAt(Instant.now());
         paymentRepository.save(payment);
+
+        // Publish Kafka event - PAYMENT_PROCESSING
+        eventPublisher.publishPaymentProcessing(payment);
 
         String reservationId = null;
         String transactionId = null;
@@ -286,6 +297,9 @@ public class PaymentServiceImpl implements PaymentService {
             payment.setStatus(PaymentStatus.COMPLETED);
             payment.setProcessedAt(Instant.now());
             payment.setUpdatedAt(Instant.now());
+
+            // Publish Kafka event - PAYMENT_COMPLETED
+            eventPublisher.publishPaymentCompleted(payment);
             
             log.info("Payment processing SUCCESS: paymentId={}, transactionId={}, reference={}", 
                     payment.getId(), transactionId, payment.getReferenceNumber());
@@ -297,12 +311,18 @@ public class PaymentServiceImpl implements PaymentService {
             payment.setFailureReason("Insufficient balance: " + e.getMessage());
             payment.setUpdatedAt(Instant.now());
 
+            // Publish Kafka event - PAYMENT_FAILED
+            eventPublisher.publishPaymentFailed(payment, e.getMessage());
+
         } catch (AccountNotFoundException e) {
             // Account not found - no reservation was made, just fail
             log.warn("Payment failed - account not found: {}", e.getMessage());
             payment.setStatus(PaymentStatus.FAILED);
             payment.setFailureReason("Account not found: " + e.getMessage());
             payment.setUpdatedAt(Instant.now());
+
+            // Publish Kafka event - PAYMENT_FAILED
+            eventPublisher.publishPaymentFailed(payment, e.getMessage());
 
         } catch (TransactionException e) {
             // Transaction service error - rollback reservation and fail transaction
@@ -359,6 +379,9 @@ public class PaymentServiceImpl implements PaymentService {
                 payment.setFailureReason(reason + " (WARNING: Failed to release reservation)");
             }
         }
+
+        // Publish Kafka event - PAYMENT_FAILED
+        eventPublisher.publishPaymentFailed(payment, reason);
     }
 
     // 🔐 Internal helpers

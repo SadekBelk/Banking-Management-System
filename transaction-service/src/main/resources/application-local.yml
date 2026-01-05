@@ -1,29 +1,16 @@
-# Local Development Profile for payment-service
+# Local Development Profile for transaction-service
 # Run with: mvn spring-boot:run -Dspring-boot.run.profiles=local
 
 server:
-  port: 4003
-
-account-service:
-  base-url: http://localhost:4001
-
-# gRPC Client Configuration - Local Development
-grpc:
-  client:
-    account-service:
-      address: static://localhost:9001  # Local account-service gRPC port
-      negotiation-type: plaintext
-    transaction-service:
-      address: static://localhost:9002  # Local transaction-service gRPC port
-      negotiation-type: plaintext
+  port: 4002
 
 spring:
   application:
-    name: payment-service
+    name: transaction-service
 
   # H2 In-Memory Database for local testing
   datasource:
-    url: jdbc:h2:mem:paymentdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    url: jdbc:h2:mem:transactiondb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
     username: sa
     password:
     driver-class-name: org.h2.Driver
@@ -57,10 +44,14 @@ spring:
       partitions: 1
       replication-factor: 1
 
+# gRPC Server Configuration
+grpc:
+  server:
+    port: 9002
+
 logging:
   level:
     org.springdoc: DEBUG
-    com.bankingmanagement.paymentservice.grpc: DEBUG
-    com.bankingmanagement.paymentservice.event: DEBUG
-    net.devh.boot.grpc: DEBUG
+    com.bankingmanagement.transactionservice.grpc: DEBUG
+    com.bankingmanagement.transactionservice.event: DEBUG
     org.apache.kafka: WARN
