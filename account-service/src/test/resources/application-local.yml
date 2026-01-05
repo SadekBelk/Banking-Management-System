@@ -21,4 +21,4 @@ spring:
 # gRPC Server Configuration for tests
 grpc:
   server:
-    port: 9090  # Fixed port for gRPC integration tests
+    port: 0  # Use ephemeral port to avoid local conflicts

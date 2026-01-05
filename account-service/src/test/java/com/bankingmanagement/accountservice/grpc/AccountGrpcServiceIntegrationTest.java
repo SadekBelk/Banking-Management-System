@@ -5,14 +5,10 @@ import com.banking.proto.common.Money;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.StatusRuntimeException;
-import net.devh.boot.grpc.server.autoconfigure.GrpcServerAutoConfiguration;
-import net.devh.boot.grpc.server.serverfactory.GrpcServerLifecycle;
+import io.grpc.inprocess.InProcessChannelBuilder;
 import org.junit.jupiter.api.*;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.context.ApplicationContext;
 import org.springframework.test.context.ActiveProfiles;
-
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -22,13 +18,13 @@ import static org.junit.jupiter.api.Assertions.*;
  * Integration test for AccountGrpcService.
  * 
  * Tests the complete gRPC flow for ReserveBalance operation.
- * Uses random ports to avoid conflicts.
+ * Uses a random (ephemeral) port to avoid local port conflicts.
  */
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {
-        "grpc.server.port=9090",
-        "grpc.server.in-process-name=test"
+                "grpc.server.port=0",
+                                "grpc.server.in-process-name=test"
     }
 )
 @ActiveProfiles("local")
@@ -38,16 +34,13 @@ class AccountGrpcServiceIntegrationTest {
     private ManagedChannel channel;
     private AccountServiceGrpc.AccountServiceBlockingStub blockingStub;
 
-    @Autowired
-    private ApplicationContext applicationContext;
-
     @BeforeEach
     void setupChannel() {
         if (channel == null || channel.isShutdown()) {
-            channel = ManagedChannelBuilder
-                    .forAddress("localhost", 9090)
-                    .usePlaintext()
-                    .build();
+                        channel = InProcessChannelBuilder
+                                        .forName("test")
+                                        .directExecutor()
+                                        .build();
             
             blockingStub = AccountServiceGrpc.newBlockingStub(channel);
         }
