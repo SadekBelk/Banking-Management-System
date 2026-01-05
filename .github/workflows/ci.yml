@@ -1,0 +1,258 @@
+# =============================================================================
+# DIGITAL BANKING MANAGEMENT - CI WORKFLOW
+# =============================================================================
+# This workflow builds and tests all microservices on every push and PR.
+#
+# Build Order (due to dependencies):
+#   1. banking-proto (generates gRPC classes)
+#   2. All services in parallel (depend on proto)
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# SECTION 1: NAME
+# -----------------------------------------------------------------------------
+# WHAT: Display name shown in GitHub Actions UI
+# WHY:  Makes it easy to identify this workflow in the Actions tab
+# -----------------------------------------------------------------------------
+name: CI - Build and Test
+
+# -----------------------------------------------------------------------------
+# SECTION 2: TRIGGERS
+# -----------------------------------------------------------------------------
+# WHAT: Defines WHEN this workflow runs
+# WHY:  We want CI to run on every code change to catch issues early
+#
+# Options explained:
+#   push:         Runs when code is pushed directly
+#   pull_request: Runs when a PR is opened/updated
+#   workflow_dispatch: Allows manual trigger from GitHub UI (useful for debugging)
+#
+# Current Setup: Run on ALL branches for testing
+# Later: Change to [ main, develop ] when ready for production
+# -----------------------------------------------------------------------------
+on:
+  push:
+    branches: [ '**' ]             # Run on ALL branches (for testing)
+    # branches: [ main, develop ]  # Uncomment this when ready for production
+  pull_request:
+    branches: [ main, develop ]    # Run on PRs targeting these branches
+  workflow_dispatch:               # Manual trigger button in GitHub UI
+
+# -----------------------------------------------------------------------------
+# SECTION 3: ENVIRONMENT VARIABLES
+# -----------------------------------------------------------------------------
+# WHAT: Variables available to ALL jobs in this workflow
+# WHY:  Centralize Java version - change once, applies everywhere
+# -----------------------------------------------------------------------------
+env:
+  JAVA_VERSION: '21'
+  JAVA_DISTRIBUTION: 'temurin'     # Eclipse Temurin (formerly AdoptOpenJDK)
+
+# -----------------------------------------------------------------------------
+# SECTION 4: JOBS
+# -----------------------------------------------------------------------------
+# WHAT: The actual work to perform
+# WHY:  Jobs run in parallel by default, but we can define dependencies
+#
+# Our strategy:
+#   Job 1: build-proto (must complete first)
+#   Job 2: build-and-test-services (runs after proto, tests all services in parallel)
+# -----------------------------------------------------------------------------
+jobs:
+
+  # ===========================================================================
+  # JOB 1: BUILD PROTO MODULE
+  # ===========================================================================
+  # WHAT: Compiles .proto files into Java classes
+  # WHY:  All services depend on these generated classes
+  # HOW:  Uses Maven to build and installs to local repo, then uploads as artifact
+  # ===========================================================================
+  build-proto:
+    name: 📦 Build Proto Module
+    runs-on: ubuntu-latest         # GitHub-hosted Linux runner (free for public repos)
+    
+    steps:
+      # -----------------------------------------------------------------------
+      # Step 1.1: Checkout code
+      # -----------------------------------------------------------------------
+      # WHAT: Downloads your repository code to the runner
+      # WHY:  The runner starts empty - we need our code!
+      # -----------------------------------------------------------------------
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      # -----------------------------------------------------------------------
+      # Step 1.2: Setup Java
+      # -----------------------------------------------------------------------
+      # WHAT: Installs Java 21 on the runner
+      # WHY:  Your project requires Java 21 with preview features
+      # BONUS: Caches Maven dependencies to speed up future runs
+      # -----------------------------------------------------------------------
+      - name: ☕ Set up Java ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          cache: maven              # Caches ~/.m2/repository
+
+      # -----------------------------------------------------------------------
+      # Step 1.3: Build Proto Module
+      # -----------------------------------------------------------------------
+      # WHAT: Runs 'mvn clean install' on banking-proto
+      # WHY:  Generates Java classes from .proto files and installs to local Maven repo
+      # FLAGS:
+      #   -B          : Batch mode (no interactive prompts)
+      #   -DskipTests : Skip tests (proto module has no meaningful tests)
+      # -----------------------------------------------------------------------
+      - name: 🔨 Build banking-proto
+        run: |
+          cd banking-proto
+          mvn -B clean install -DskipTests
+
+      # -----------------------------------------------------------------------
+      # Step 1.4: Upload Proto Artifact
+      # -----------------------------------------------------------------------
+      # WHAT: Saves the built proto JAR for other jobs to use
+      # WHY:  Each job runs on a FRESH runner - they don't share files!
+      #       We upload the built artifact so services can download it.
+      # -----------------------------------------------------------------------
+      - name: 📤 Upload proto artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: banking-proto
+          path: banking-proto/target/*.jar
+          retention-days: 1         # Only need it for this workflow run
+
+      # -----------------------------------------------------------------------
+      # Step 1.5: Cache Proto in Maven Local Repo
+      # -----------------------------------------------------------------------
+      # WHAT: Uploads the installed proto from local Maven repository
+      # WHY:  Services need proto in their local .m2 to compile
+      # -----------------------------------------------------------------------
+      - name: 📤 Upload Maven local repository (proto)
+        uses: actions/upload-artifact@v4
+        with:
+          name: maven-local-proto
+          path: ~/.m2/repository/com/BankingManagement/banking-proto
+          retention-days: 1
+
+  # ===========================================================================
+  # JOB 2: BUILD AND TEST ALL SERVICES
+  # ===========================================================================
+  # WHAT: Builds and tests all 4 microservices
+  # WHY:  Verifies all services compile and tests pass
+  # HOW:  Uses matrix strategy to run services in parallel
+  # ===========================================================================
+  build-and-test-services:
+    name: 🧪 ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    needs: build-proto             # ⚠️ WAIT for proto to complete first!
+    
+    # -------------------------------------------------------------------------
+    # Matrix Strategy
+    # -------------------------------------------------------------------------
+    # WHAT: Runs this job multiple times with different values
+    # WHY:  Tests all services in PARALLEL (faster than sequential)
+    # HOW:  GitHub creates 4 parallel jobs, one per service
+    # -------------------------------------------------------------------------
+    strategy:
+      matrix:
+        service:
+          - account-service
+          - customer-service
+          - transaction-service
+          - payment-service
+      fail-fast: false             # Don't cancel others if one fails
+    
+    steps:
+      # -----------------------------------------------------------------------
+      # Step 2.1: Checkout code
+      # -----------------------------------------------------------------------
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      # -----------------------------------------------------------------------
+      # Step 2.2: Setup Java
+      # -----------------------------------------------------------------------
+      - name: ☕ Set up Java ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          cache: maven
+
+      # -----------------------------------------------------------------------
+      # Step 2.3: Download Proto Artifact
+      # -----------------------------------------------------------------------
+      # WHAT: Downloads the proto JAR built in Job 1
+      # WHY:  This job runs on a DIFFERENT runner - needs proto to compile
+      # -----------------------------------------------------------------------
+      - name: 📥 Download proto artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: maven-local-proto
+          path: ~/.m2/repository/com/BankingManagement/banking-proto
+
+      # -----------------------------------------------------------------------
+      # Step 2.4: Build Service
+      # -----------------------------------------------------------------------
+      # WHAT: Compiles the service code
+      # WHY:  Verifies code compiles without errors
+      # -----------------------------------------------------------------------
+      - name: 🔨 Build ${{ matrix.service }}
+        run: |
+          cd ${{ matrix.service }}
+          mvn -B clean compile
+
+      # -----------------------------------------------------------------------
+      # Step 2.5: Run Tests
+      # -----------------------------------------------------------------------
+      # WHAT: Executes all unit and integration tests
+      # WHY:  Catches bugs before they reach production
+      # FLAGS:
+      #   -B              : Batch mode
+      #   --fail-at-end   : Run ALL tests even if some fail, then report
+      # -----------------------------------------------------------------------
+      - name: 🧪 Run tests for ${{ matrix.service }}
+        run: |
+          cd ${{ matrix.service }}
+          mvn -B test --fail-at-end
+
+      # -----------------------------------------------------------------------
+      # Step 2.6: Upload Test Results
+      # -----------------------------------------------------------------------
+      # WHAT: Saves test reports as downloadable artifacts
+      # WHY:  Allows debugging failed tests from GitHub UI
+      # WHEN: Always runs, even if tests fail (important for debugging!)
+      # -----------------------------------------------------------------------
+      - name: 📊 Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()               # Run even if tests failed
+        with:
+          name: test-results-${{ matrix.service }}
+          path: ${{ matrix.service }}/target/surefire-reports/
+          retention-days: 7
+
+  # ===========================================================================
+  # JOB 3: CI STATUS SUMMARY
+  # ===========================================================================
+  # WHAT: Final job that only passes if ALL services pass
+  # WHY:  Gives a single "CI passed" or "CI failed" status
+  # HOW:  Depends on all service builds - if any fail, this fails
+  # ===========================================================================
+  ci-status:
+    name: ✅ CI Status
+    runs-on: ubuntu-latest
+    needs: build-and-test-services
+    if: always()                   # Always run to report final status
+    
+    steps:
+      - name: Check CI Status
+        run: |
+          if [ "${{ needs.build-and-test-services.result }}" == "success" ]; then
+            echo "✅ All services built and tested successfully!"
+            exit 0
+          else
+            echo "❌ Some services failed. Check the logs above."
+            exit 1
+          fi
