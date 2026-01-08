@@ -1,0 +1,24 @@
+# Test Configuration for account-service
+# Overrides application-local.yml settings for test environment
+
+spring:
+  # Use H2 for tests
+  datasource:
+    url: jdbc:h2:mem:accountdb-test;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: create-drop
+
+  sql:
+    init:
+      mode: never  # Don't run data.sql for tests
+
+# gRPC Server Configuration for tests
+grpc:
+  server:
+    port: 0  # Use ephemeral port to avoid local conflicts
