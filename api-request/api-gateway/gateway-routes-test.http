@@ -1,0 +1,85 @@
+### API Gateway Health Check
+GET http://localhost:4004/actuator/health
+Accept: application/json
+
+### Gateway Routes Info
+GET http://localhost:4004/actuator/gateway/routes
+Accept: application/json
+
+###
+### ============================================
+### Swagger/OpenAPI Documentation (via Gateway)
+### ============================================
+
+### Customer Service - Swagger UI
+GET http://localhost:4004/customer-service/swagger-ui.html
+
+### Customer Service - API Docs JSON
+GET http://localhost:4004/customer-service/v3/api-docs
+Accept: application/json
+
+### Account Service - Swagger UI
+GET http://localhost:4004/account-service/swagger-ui.html
+
+### Account Service - API Docs JSON
+GET http://localhost:4004/account-service/v3/api-docs
+Accept: application/json
+
+### Transaction Service - Swagger UI
+GET http://localhost:4004/transaction-service/swagger-ui.html
+
+### Transaction Service - API Docs JSON
+GET http://localhost:4004/transaction-service/v3/api-docs
+Accept: application/json
+
+### Payment Service - Swagger UI
+GET http://localhost:4004/payment-service/swagger-ui.html
+
+### Payment Service - API Docs JSON
+GET http://localhost:4004/payment-service/v3/api-docs
+Accept: application/json
+
+###
+### ============================================
+### Test Routes Through Gateway
+### ============================================
+
+### Get Customers (via Gateway → Customer Service)
+GET http://localhost:4004/api/customers
+Accept: application/json
+
+### Get Customer by ID (via Gateway → Customer Service)
+GET http://localhost:4004/api/customers/{{customerId}}
+Accept: application/json
+
+### Get Accounts (via Gateway → Account Service)
+GET http://localhost:4004/api/accounts
+Accept: application/json
+
+### Get Account by ID (via Gateway → Account Service)
+GET http://localhost:4004/api/accounts/{{accountId}}
+Accept: application/json
+
+### Get Transactions (via Gateway → Transaction Service)
+GET http://localhost:4004/api/transactions
+Accept: application/json
+
+### Get Transaction by ID (via Gateway → Transaction Service)
+GET http://localhost:4004/api/transactions/{{transactionId}}
+Accept: application/json
+
+### Get Payments (via Gateway → Payment Service)
+GET http://localhost:4004/api/payments
+Accept: application/json
+
+### Create Payment (via Gateway → Payment Service)
+POST http://localhost:4004/api/payments
+Content-Type: application/json
+
+{
+  "sourceAccountId": "{{sourceAccountId}}",
+  "destinationAccountId": "{{destinationAccountId}}",
+  "amount": 100.00,
+  "currency": "USD",
+  "description": "Test payment via gateway"
+}

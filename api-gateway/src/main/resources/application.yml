@@ -1,0 +1,164 @@
+server:
+  port: 4004 # Gateway listens on port 4004
+
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      server:
+        webflux:
+          routes:
+            # Customer Service Routes
+            - id: customer-service
+              uri: ${CUSTOMER_SERVICE_URL:http://customer-service:4000}
+              predicates:
+                - Path=/api/customers/**
+              filters:
+                - RewritePath=/api/customers(?<segment>.*), /api/customers$\{segment}
+
+            # Account Service Routes
+            - id: account-service
+              uri: ${ACCOUNT_SERVICE_URL:http://account-service:4001}
+              predicates:
+                - Path=/api/accounts/**
+              filters:
+                - RewritePath=/api/accounts(?<segment>.*), /api/accounts$\{segment}
+
+            # Transaction Service Routes
+            - id: transaction-service
+              uri: ${TRANSACTION_SERVICE_URL:http://transaction-service:4002}
+              predicates:
+                - Path=/api/transactions/**
+              filters:
+                - RewritePath=/api/transactions(?<segment>.*), /api/transactions$\{segment}
+
+            # Payment Service Routes
+            - id: payment-service
+              uri: ${PAYMENT_SERVICE_URL:http://payment-service:4003}
+              predicates:
+                - Path=/api/payments/**
+              filters:
+                - RewritePath=/api/payments(?<segment>.*), /api/payments$\{segment}
+
+            # ============================================
+            # Swagger/OpenAPI Documentation Routes
+            # ============================================
+
+            # Customer Service Swagger
+            - id: customer-service-swagger-ui
+              uri: ${CUSTOMER_SERVICE_URL:http://customer-service:4000}
+              predicates:
+                - Path=/customer-service/swagger-ui.html
+              filters:
+                - RewritePath=/customer-service/swagger-ui.html, /swagger-ui.html
+
+            - id: customer-service-swagger-resources
+              uri: ${CUSTOMER_SERVICE_URL:http://customer-service:4000}
+              predicates:
+                - Path=/customer-service/swagger-ui/**
+              filters:
+                - RewritePath=/customer-service/swagger-ui(?<segment>.*), /swagger-ui$\{segment}
+
+            - id: customer-service-api-docs
+              uri: ${CUSTOMER_SERVICE_URL:http://customer-service:4000}
+              predicates:
+                - Path=/customer-service/v3/api-docs/**
+              filters:
+                - RewritePath=/customer-service/v3/api-docs(?<segment>.*), /v3/api-docs$\{segment}
+
+            # Account Service Swagger
+            - id: account-service-swagger-ui
+              uri: ${ACCOUNT_SERVICE_URL:http://account-service:4001}
+              predicates:
+                - Path=/account-service/swagger-ui.html
+              filters:
+                - RewritePath=/account-service/swagger-ui.html, /swagger-ui.html
+
+            - id: account-service-swagger-resources
+              uri: ${ACCOUNT_SERVICE_URL:http://account-service:4001}
+              predicates:
+                - Path=/account-service/swagger-ui/**
+              filters:
+                - RewritePath=/account-service/swagger-ui(?<segment>.*), /swagger-ui$\{segment}
+
+            - id: account-service-api-docs
+              uri: ${ACCOUNT_SERVICE_URL:http://account-service:4001}
+              predicates:
+                - Path=/account-service/v3/api-docs/**
+              filters:
+                - RewritePath=/account-service/v3/api-docs(?<segment>.*), /v3/api-docs$\{segment}
+
+            # Transaction Service Swagger
+            - id: transaction-service-swagger-ui
+              uri: ${TRANSACTION_SERVICE_URL:http://transaction-service:4002}
+              predicates:
+                - Path=/transaction-service/swagger-ui.html
+              filters:
+                - RewritePath=/transaction-service/swagger-ui.html, /swagger-ui.html
+
+            - id: transaction-service-swagger-resources
+              uri: ${TRANSACTION_SERVICE_URL:http://transaction-service:4002}
+              predicates:
+                - Path=/transaction-service/swagger-ui/**
+              filters:
+                - RewritePath=/transaction-service/swagger-ui(?<segment>.*), /swagger-ui$\{segment}
+
+            - id: transaction-service-api-docs
+              uri: ${TRANSACTION_SERVICE_URL:http://transaction-service:4002}
+              predicates:
+                - Path=/transaction-service/v3/api-docs/**
+              filters:
+                - RewritePath=/transaction-service/v3/api-docs(?<segment>.*), /v3/api-docs$\{segment}
+
+            # Payment Service Swagger
+            - id: payment-service-swagger-ui
+              uri: ${PAYMENT_SERVICE_URL:http://payment-service:4003}
+              predicates:
+                - Path=/payment-service/swagger-ui.html
+              filters:
+                - RewritePath=/payment-service/swagger-ui.html, /swagger-ui.html
+
+            - id: payment-service-swagger-resources
+              uri: ${PAYMENT_SERVICE_URL:http://payment-service:4003}
+              predicates:
+                - Path=/payment-service/swagger-ui/**
+              filters:
+                - RewritePath=/payment-service/swagger-ui(?<segment>.*), /swagger-ui$\{segment}
+
+            - id: payment-service-api-docs
+              uri: ${PAYMENT_SERVICE_URL:http://payment-service:4003}
+              predicates:
+                - Path=/payment-service/v3/api-docs/**
+              filters:
+                - RewritePath=/payment-service/v3/api-docs(?<segment>.*), /v3/api-docs$\{segment}
+
+          # Global CORS Configuration
+          globalcors:
+            cors-configurations:
+              '[/**]':
+                allowed-origins: "*"
+                allowed-methods:
+                  - GET
+                  - POST
+                  - PUT
+                  - DELETE
+                  - OPTIONS
+                allowed-headers: "*"
+                max-age: 3600
+
+# Actuator Configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,gateway
+  endpoint:
+    health:
+      show-details: always
+
+# Logging Configuration
+logging:
+  level:
+    org.springframework.cloud.gateway: DEBUG
+    reactor.netty.http.client: DEBUG
