@@ -1,0 +1,276 @@
+###############################################################################
+#                                                                             #
+#                     AUTH SERVICE - HTTP API TESTS                           #
+#                                                                             #
+#  BUILD ORDER: STEP 12 of 12 (API Testing)                                   #
+#  PREVIOUS STEP: Docker configuration (service is deployable)                #
+#  THIS IS THE FINAL STEP - Test the complete authentication system           #
+#                                                                             #
+#  PURPOSE: IntelliJ HTTP Client / VS Code REST Client test file              #
+#           Test all auth-service endpoints manually                          #
+#                                                                             #
+###############################################################################
+#                                                                             #
+#  HOW TO USE THIS FILE:                                                      #
+#  ┌───────────────────────────────────────────────────────────────────────┐  #
+#  │                                                                       │  #
+#  │  1. Start auth-service (one of these options):                        │  #
+#  │     - Local: cd auth-service && mvn spring-boot:run                   │  #
+#  │     - Docker: docker compose --profile auth up --build                │  #
+#  │                                                                       │  #
+#  │  2. Click "Send Request" above each ### request                       │  #
+#  │                                                                       │  #
+#  │  3. Run requests in order for variable capture:                       │  #
+#  │     register → login → use tokens for protected endpoints             │  #
+#  │                                                                       │  #
+#  └───────────────────────────────────────────────────────────────────────┘  #
+#                                                                             #
+#  VARIABLE CAPTURE:                                                          #
+#  ┌───────────────────────────────────────────────────────────────────────┐  #
+#  │                                                                       │  #
+#  │  # @name login     ← Names this request "login"                       │  #
+#  │  POST /login                                                          │  #
+#  │       ↓                                                               │  #
+#  │  Response: {"accessToken": "eyJ...", "refreshToken": "abc..."}        │  #
+#  │       ↓                                                               │  #
+#  │  {{login.response.body.accessToken}} ← Captures for later use         │  #
+#  │                                                                       │  #
+#  └───────────────────────────────────────────────────────────────────────┘  #
+#                                                                             #
+#  ENDPOINT MAP:                                                              #
+#  ┌───────────────────────────────────────────────────────────────────────┐  #
+#  │  PUBLIC (No Auth):              PROTECTED (JWT Required):             │  #
+#  │  • POST /register               • GET  /me                            │  #
+#  │  • POST /login                  • POST /logout-all                    │  #
+#  │  • POST /refresh                • POST /change-password               │  #
+#  │  • POST /logout                                                       │  #
+#  │  • GET  /validate                                                     │  #
+#  └───────────────────────────────────────────────────────────────────────┘  #
+#                                                                             #
+###############################################################################
+
+# =============================================================================
+# BASE CONFIGURATION
+# =============================================================================
+# @baseUrl - Change this if running on different port or host
+@baseUrl = http://localhost:4005/api/auth
+
+# Dynamic variables - populated after login/register request runs
+# These reference the named request's response body
+@accessToken = {{login.response.body.accessToken}}
+@refreshToken = {{login.response.body.refreshToken}}
+
+# =============================================================================
+# 1. REGISTER NEW USER
+# =============================================================================
+# Creates a new user account and returns JWT tokens.
+# 
+# FIRST TIME: Run this to create a user
+# SUBSEQUENT: Will fail with "Username already exists" (that's expected)
+#
+# Request Body:
+# - username: 4-50 chars, alphanumeric
+# - email: Valid email format
+# - password: 8-100 chars
+# - firstName/lastName/phoneNumber: Optional profile data
+#
+# Success Response (201 Created):
+# {
+#   "accessToken": "eyJhbGciOiJIUzUxMiJ9...",
+#   "refreshToken": "a7f3bc8e-2d1a-4e5c-9876...",
+#   "tokenType": "Bearer",
+#   "expiresIn": 86400
+# }
+# =============================================================================
+### Register User
+# @name register
+POST {{baseUrl}}/register
+Content-Type: application/json
+
+{
+    "username": "johndoe",
+    "email": "john.doe@example.com",
+    "password": "Password@123",
+    "firstName": "John",
+    "lastName": "Doe",
+    "phoneNumber": "+1234567890"
+}
+
+# =============================================================================
+# 2. LOGIN
+# =============================================================================
+# Authenticates user and returns JWT tokens.
+#
+# usernameOrEmail: Can be either username OR email
+# 
+# RUN THIS FIRST to capture tokens for protected endpoints!
+# The @name login tag captures the response for {{accessToken}} variable.
+#
+# Success Response (200 OK):
+# {
+#   "accessToken": "eyJhbGciOiJIUzUxMiJ9...",  ← Use in Authorization header
+#   "refreshToken": "a7f3bc8e-2d1a-4e5c...",   ← Use for refresh endpoint
+#   "tokenType": "Bearer",
+#   "expiresIn": 86400
+# }
+# =============================================================================
+### Login with Username
+# @name login
+POST {{baseUrl}}/login
+Content-Type: application/json
+
+{
+    "usernameOrEmail": "johndoe",
+    "password": "Password@123"
+}
+
+### Login with Email (Alternative)
+# @name loginWithEmail
+POST {{baseUrl}}/login
+Content-Type: application/json
+
+{
+    "usernameOrEmail": "john.doe@example.com",
+    "password": "Password@123"
+}
+
+# =============================================================================
+# 3. TOKEN OPERATIONS
+# =============================================================================
+# Token lifecycle management endpoints.
+#
+# REFRESH: Exchange refresh token for new access token
+# - Use when access token expires (24h default)
+# - Token rotation: old refresh token is invalidated
+#
+# VALIDATE: Check if token is valid (for other services)
+# =============================================================================
+### Refresh Token
+# @name refreshToken
+POST {{baseUrl}}/refresh
+Content-Type: application/json
+
+{
+    "refreshToken": "{{refreshToken}}"
+}
+
+### Validate Token
+# Used by other services to verify token validity
+# @name validateToken
+GET {{baseUrl}}/validate?token={{accessToken}}
+
+# =============================================================================
+# 4. PROTECTED ENDPOINTS (Requires JWT)
+# =============================================================================
+# These endpoints require Authorization: Bearer <accessToken>
+#
+# The {{accessToken}} variable is captured from the login response.
+# RUN LOGIN FIRST before using these!
+# =============================================================================
+### Get Current User Profile
+# Returns user information from the JWT token
+# @name getCurrentUser
+GET {{baseUrl}}/me
+Authorization: Bearer {{accessToken}}
+
+### Change Password
+# Requires current password verification (even though authenticated)
+# This is a security best practice for sensitive operations
+# @name changePassword
+POST {{baseUrl}}/change-password
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{
+    "currentPassword": "Password@123",
+    "newPassword": "NewPassword@456",
+    "confirmPassword": "NewPassword@456"
+}
+
+# =============================================================================
+# 5. LOGOUT OPERATIONS
+# =============================================================================
+# Logout invalidates refresh tokens (not access tokens).
+# Access tokens remain valid until expiry (stateless JWT limitation).
+#
+# logout: Revokes single refresh token (single device)
+# logout-all: Revokes ALL refresh tokens (all devices)
+# =============================================================================
+### Logout (Single Device)
+# Revokes the provided refresh token
+# @name logout
+POST {{baseUrl}}/logout
+Content-Type: application/json
+
+{
+    "refreshToken": "{{refreshToken}}"
+}
+
+### Logout from All Devices
+# Revokes ALL refresh tokens for current user
+# Requires JWT authentication
+# @name logoutAll
+POST {{baseUrl}}/logout-all
+Authorization: Bearer {{accessToken}}
+
+# =============================================================================
+# 6. ERROR CASES (For Testing)
+# =============================================================================
+# These requests are expected to FAIL.
+# Use them to verify error handling works correctly.
+#
+# Expected responses:
+# - 400 Bad Request: Validation errors
+# - 401 Unauthorized: Invalid credentials or token
+# - 409 Conflict: Duplicate username/email
+# =============================================================================
+### Register with Existing Username (Should return 400/409)
+POST {{baseUrl}}/register
+Content-Type: application/json
+
+{
+    "username": "johndoe",
+    "email": "another@example.com",
+    "password": "Password@123"
+}
+
+### Login with Wrong Password (Should return 401)
+POST {{baseUrl}}/login
+Content-Type: application/json
+
+{
+    "usernameOrEmail": "johndoe",
+    "password": "wrongpassword"
+}
+
+### Access /me Without Token (Should return 401)
+GET {{baseUrl}}/me
+
+### Access /me With Invalid Token (Should return 401)
+GET {{baseUrl}}/me
+Authorization: Bearer invalid_token_here
+
+###############################################################################
+#                                                                             #
+#  ┌─────────────────────────────────────────────────────────────────────┐    #
+#  │                                                                     │    #
+#  │   🎉 STEP 12 COMPLETE - AUTH SERVICE BUILD FINISHED! 🎉            │    #
+#  │                                                                     │    #
+#  │   BUILD ORDER SUMMARY:                                              │    #
+#  │                                                                     │    #
+#  │   STEP 1:  pom.xml (Dependencies)                                   │    #
+#  │   STEP 2:  application.yml (Configuration)                          │    #
+#  │   STEP 3:  Entity classes (User, Role, RefreshToken)                │    #
+#  │   STEP 4:  Repository interfaces                                    │    #
+#  │   STEP 5:  DTO classes (Request/Response objects)                   │    #
+#  │   STEP 6:  Exception classes (Custom exceptions + handler)          │    #
+#  │   STEP 7:  Security classes (JWT + Spring Security)                 │    #
+#  │   STEP 8:  Service layer (AuthService interface + impl)             │    #
+#  │   STEP 9:  Configuration classes (Security, OpenAPI)                │    #
+#  │   STEP 10: REST Controller (AuthController)                         │    #
+#  │   STEP 11: Docker (Dockerfile + docker-compose.yml)                 │    #
+#  │   STEP 12: Test files (this file!)                                  │    #
+#  │                                                                     │    #
+#  └─────────────────────────────────────────────────────────────────────┘    #
+#                                                                             #
+###############################################################################

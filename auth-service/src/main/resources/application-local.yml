@@ -1,0 +1,88 @@
+# =============================================================================
+# Auth Service - Local Development Configuration
+# =============================================================================
+# Port: 4005 (HTTP)
+# Database: H2 In-Memory
+# H2 Console: http://localhost:4005/h2-console
+# Swagger UI: http://localhost:4005/swagger-ui.html
+# =============================================================================
+
+server:
+  port: 4005
+
+spring:
+  application:
+    name: auth-service
+
+  # H2 In-Memory Database Configuration
+  datasource:
+    url: jdbc:h2:mem:authdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+        format_sql: true
+
+  # H2 Console
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+      settings:
+        web-allow-others: false
+
+  # Jackson Configuration
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    default-property-inclusion: non_null
+
+# =============================================================================
+# JWT Configuration (Local Development)
+# =============================================================================
+jwt:
+  # Base64 encoded secret key (at least 256 bits for HS256)
+  secret: bG9jYWxEZXZTZWNyZXRLZXlGb3JKV1RBdXRoZW50aWNhdGlvblRoYXRJc0F0TGVhc3QyNTZCaXRzTG9uZ0ZvckhTMjU2QWxnb3JpdGht
+  expiration: 86400000          # 24 hours in milliseconds
+  refresh-expiration: 604800000  # 7 days in milliseconds
+  issuer: digital-banking-auth-service-local
+
+# =============================================================================
+# Actuator Configuration
+# =============================================================================
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,env
+  endpoint:
+    health:
+      show-details: always
+
+# =============================================================================
+# OpenAPI / Swagger Configuration
+# =============================================================================
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operationsSorter: method
+
+# =============================================================================
+# Logging Configuration (More verbose for local development)
+# =============================================================================
+logging:
+  level:
+    root: INFO
+    com.bankingmanagement.authservice: DEBUG
+    org.springframework.security: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE

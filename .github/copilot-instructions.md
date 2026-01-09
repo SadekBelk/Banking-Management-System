@@ -11,6 +11,7 @@ This is a **microservices-based digital banking system** using Spring Boot 3.5+ 
 | account-service | 4001 | 9001 | accountdb:5433 | Balance owner, **gRPC server** |
 | transaction-service | 4002 | 9002 | transactiondb:5434 | Ledger/audit trail, **gRPC server** |
 | payment-service | 4003 | - | paymentdb:5435 | Payment orchestrator, **gRPC client** |
+| auth-service | 4005 | - | authdb:5436 | JWT authentication, token management |
 
 ### Critical Data Flow: Payment Processing (5-Step gRPC Flow)
 ```
@@ -286,10 +287,64 @@ spring:
 
 For local development, use `localhost:9092`.
 
+## JWT Authentication (auth-service)
+
+### Overview
+The `auth-service` provides JWT-based authentication for the banking system. It handles user registration, login, token management, and validation.
+
+### Endpoints
+| Endpoint | Method | Description | Auth Required |
+|----------|--------|-------------|---------------|
+| `/api/auth/register` | POST | Register new user | No |
+| `/api/auth/login` | POST | Login, get JWT tokens | No |
+| `/api/auth/refresh` | POST | Refresh access token | No |
+| `/api/auth/logout` | POST | Revoke refresh token | No |
+| `/api/auth/logout-all` | POST | Logout all devices | Yes |
+| `/api/auth/me` | GET | Get current user info | Yes |
+| `/api/auth/change-password` | POST | Change password | Yes |
+| `/api/auth/validate` | GET | Validate token | No |
+
+### Token Structure
+- **Access Token**: Short-lived JWT (24h default), contains user ID, username, email, roles
+- **Refresh Token**: Long-lived random string (7 days default), stored in database
+
+### Roles
+| Role | Description |
+|------|-------------|
+| `ROLE_USER` | Basic authenticated user |
+| `ROLE_CUSTOMER` | Bank customer with account access |
+| `ROLE_TELLER` | Bank teller with transaction capabilities |
+| `ROLE_MANAGER` | Branch manager with elevated permissions |
+| `ROLE_ADMIN` | System administrator with full access |
+
+### Key Classes
+| Class | Purpose |
+|-------|---------|
+| `JwtTokenProvider` | Generate/validate JWT tokens |
+| `JwtAuthenticationFilter` | Extract & validate tokens on requests |
+| `CustomUserDetailsService` | Load user from database |
+| `SecurityConfig` | Spring Security configuration |
+
+### Configuration
+```yaml
+jwt:
+  secret: ${JWT_SECRET:base64EncodedSecret}  # Base64 encoded, min 256 bits
+  expiration: 86400000                        # 24 hours
+  refresh-expiration: 604800000               # 7 days
+  issuer: digital-banking-auth-service
+```
+
+### Docker Profiles
+```bash
+docker compose --profile auth up --build     # Auth service only
+docker compose --profile full up --build     # All services including auth
+```
+
 ## Version History
 
 | Date | Change | Impact |
 |------|--------|--------|
+| Jan 2026 | Added auth-service with JWT authentication | New service for user auth, token management |
 | Dec 2025 | Added Kafka event publishing | transaction-service and payment-service now publish domain events to Kafka |
 | Dec 2025 | Added transaction-service as gRPC server | payment-service now calls both account-service AND transaction-service via gRPC |
 | Dec 2025 | Implemented 5-step payment flow | Full reservation + transaction ledger pattern |
